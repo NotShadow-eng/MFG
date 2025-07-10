@@ -1,0 +1,1681 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Optimizador ASME Y14.5 para Tubulares</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        :root {
+            --asme-blue: #003366;
+            --asme-red: #C00;
+            --asme-yellow: #FFD700;
+            --asme-dimension: #333;
+            --asme-background: #F8F8F8;
+            --asme-line: #000;
+            --asme-border: #000;
+            --asme-title-block: #333;
+        }
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: var(--asme-background);
+            color: #333;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 0;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            border: 1px solid #ddd;
+        }
+        h1 {
+            color: var(--asme-blue);
+            text-align: center;
+            margin-bottom: 30px;
+            font-weight: 700;
+            border-bottom: 2px solid var(--asme-blue);
+            padding-bottom: 10px;
+        }
+        .control-panel {
+            background: white;
+            padding: 20px;
+            border: 1px solid #ddd;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: var(--asme-blue);
+            font-size: 14px;
+        }
+        input, select, button {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 0;
+            width: 100%;
+            box-sizing: border-box;
+            font-family: 'Arial', sans-serif;
+        }
+        button {
+            background-color: var(--asme-blue);
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.3s;
+            padding: 12px;
+            text-transform: uppercase;
+            font-size: 14px;
+            letter-spacing: 0.5px;
+        }
+        button:hover {
+            background-color: #002244;
+        }
+        .results {
+            margin-top: 40px;
+        }
+        .chart-container {
+            position: relative;
+            height: 500px;
+            margin-bottom: 50px;
+            border: 1px solid #ddd;
+            padding: 20px;
+            background: white;
+        }
+        .tube-visualization {
+            margin: 30px 0;
+            overflow-x: auto;
+            background: white;
+            padding: 20px;
+            border: 1px solid #ddd;
+            position: relative;
+        }
+        .asme-title-block {
+            background-color: transparent;
+            color: var(--asme-title-block);
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .asme-notes {
+            border-top: 2px solid var(--asme-line);
+            padding-top: 15px;
+            margin-top: 30px;
+            font-size: 13px;
+        }
+        .dimension-line {
+            stroke: var(--asme-line);
+            stroke-width: 0.5;
+        }
+        .dimension-text {
+            fill: var(--asme-line);
+            font-size: 10px;
+            font-family: 'Arial', sans-serif;
+        }
+        .leader-line {
+            stroke: var(--asme-line);
+            stroke-width: 0.35;
+            stroke-dasharray: 5, 5;
+        }
+        .extension-line {
+            stroke: var(--asme-line);
+            stroke-width: 0.35;
+        }
+        .sortable {
+            cursor: pointer;
+            position: relative;
+            user-select: none;
+        }
+        .sortable:hover {
+            background-color: #002244;
+        }
+        .sort-arrow {
+            display: inline-block;
+            width: 0;
+            height: 0;
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            margin-left: 8px;
+            vertical-align: middle;
+            opacity: 0.6;
+        }
+        .sortable.asc .sort-arrow {
+            border-bottom: 5px solid white;
+            opacity: 1;
+        }
+        .sortable.desc .sort-arrow {
+            border-top: 5px solid white;
+            opacity: 1;
+        }
+        .cuts-list {
+            margin-top: 20px;
+            border: 1px solid #ddd;
+            padding: 15px;
+            background: white;
+        }
+        .cuts-list h3 {
+            margin-top: 0;
+            color: var(--asme-blue);
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        .cuts-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .cuts-table th, .cuts-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        .cuts-table th {
+            background-color: var(--asme-blue);
+            color: white;
+        }
+        .summary-card {
+            background: white;
+            border: 1px solid #ddd;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        .summary-card h2 {
+            margin-top: 0;
+            color: var(--asme-blue);
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+        }
+        .summary-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .summary-item strong {
+            color: var(--asme-blue);
+        }
+        .highlight {
+            background-color: rgba(0, 51, 102, 0.05);
+            font-weight: bold;
+        }
+        .remove-btn {
+            background: var(--asme-red);
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .remove-btn:hover {
+            background: #900;
+        }
+        .export-btn {
+            background: #27ae60;
+            margin-top: 20px;
+        }
+        .export-btn:hover {
+            background: #219653;
+        }
+        .secondary-btn {
+            font-size: 12px;
+            padding: 10px;
+        }
+        .save-btn {
+            background-color: #27ae60;
+        }
+        .save-btn:hover {
+            background-color: #219653;
+        }
+        .load-btn {
+            background-color: #f39c12;
+        }
+        .load-btn:hover {
+            background-color: #e67e22;
+        }
+        .pdf-btn {
+            background-color: #9b59b6;
+        }
+        .pdf-btn:hover {
+            background-color: #8e44ad;
+        }
+        .engineering-drawing {
+            border: 1px solid var(--asme-border);
+            padding: 15px;
+            background: white;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .drawing-title {
+            text-align: center;
+            font-weight: bold;
+            margin-bottom: 15px;
+            border-bottom: 1px solid var(--asme-border);
+            padding-bottom: 5px;
+        }
+        .drawing-border {
+            border: 1px solid var(--asme-border);
+            padding: 10px;
+        }
+        .regex-help {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+        .regex-examples {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            font-size: 12px;
+        }
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1001;
+        }
+        .modal-content {
+            background: white;
+            padding: 25px;
+            border-radius: 5px;
+            width: 90%;
+            max-width: 800px;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        .modal-header {
+            border-bottom: 1px solid #eee;
+            padding-bottom: 15px;
+            margin-bottom: 15px;
+        }
+        .modal-header h2 {
+            margin: 0;
+            color: var(--asme-blue);
+        }
+        .modal-body {
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+        .modal-footer {
+            border-top: 1px solid #eee;
+            padding-top: 15px;
+            margin-top: 15px;
+            font-size: 12px;
+        }
+        .modal-body .cuts-table input[type="text"], .modal-body .cuts-table input[type="number"] {
+            width: 100%;
+            padding: 6px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            box-sizing: border-box;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="asme-title-block">
+            <h1>OPTIMIZADOR DE CORTES PARA TUBULARES</h1>
+            <div style="display: flex; justify-content: space-between;">
+                <span>DIBUJO: OPT-CORTES-001</span>
+                <span>NORMA: ASME Y14.5-2018</span>
+                <span>ESCALA: 1:10</span>
+            </div>
+        </div>
+        
+        <div class="control-panel">
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px;">
+                <div class="form-group">
+                    <label for="tubeLength">LONGITUD DEL TUBULAR (PULG):</label>
+                    <input type="number" id="tubeLength" value="240" step="0.1" min="1">
+                </div>
+                
+                <div class="form-group">
+                    <label for="cutLength">LONGITUD DEL CORTE (PULG):</label>
+                    <input type="number" id="cutLength" step="0.1" min="0.1">
+                </div>
+                
+                <div class="form-group">
+                    <label for="cutQuantity">CANTIDAD:</label>
+                    <input type="number" id="cutQuantity" value="1" min="1">
+                </div>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-top: 20px;">
+                <button id="addCut">AGREGAR CORTE</button>
+                <button id="optimize">OPTIMIZAR CORTES</button>
+                <button id="reset">REINICIAR</button>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 10px;">
+                <button id="saveCuts" class="secondary-btn save-btn">GUARDAR LISTA</button>
+                <button id="loadCuts" class="secondary-btn load-btn">CARGAR LISTA</button>
+            </div>
+            
+            <div style="margin-top: 10px;">
+                <button id="loadPdf" class="secondary-btn pdf-btn">CARGAR PDF</button>
+                <input type="file" id="pdfFileInput" style="display:none" accept=".pdf"/>
+            </div>
+            
+       
+            <input type="file" id="loadFile" style="display:none" accept=".json, .txt"/>
+            
+            <div class="cuts-list">
+                <h3>CORTES AGREGADOS</h3>
+                <table class="cuts-table" id="cutsTable">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th data-sort="length" class="sortable">Longitud (pulg) <span class="sort-arrow"></span></th>
+                            <th data-sort="description" class="sortable">Descripción <span class="sort-arrow"></span></th>
+                            <th data-sort="quantity" class="sortable">Cantidad <span class="sort-arrow"></span></th>
+                            <th>Total (pulg)</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody id="cutsTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div class="results" id="results" style="display: none;">
+            <button id="exportPdf" class="export-btn">EXPORTAR A PDF</button>
+            
+            <div class="summary-card">
+                <h2>RESUMEN DE OPTIMIZACIÓN</h2>
+                <div class="summary-grid" id="summary"></div>
+            </div>
+            
+            <div class="chart-container">
+                <canvas id="optimizationChart"></canvas>
+            </div>
+            
+            <h2 style="color: var(--asme-blue); border-bottom: 1px solid var(--asme-blue); padding-bottom: 8px;">
+                DISTRIBUCIÓN DE TUBULARES - VISTA DE INGENIERÍA
+            </h2>
+            <div id="tubeVisualizations"></div>
+            
+            <div class="asme-notes">
+                <p><strong>NOTAS:</strong></p>
+                <p>1. TODAS LAS DIMENSIONES EN PULGADAS</p>
+                <p>2. TOLERANCIA DE CORTE: ±0.125"</p>
+                <p>3. EFICIENCIA CALCULADA SOBRE LONGITUD NOMINAL</p>
+                <p>4. SE CONSIDERA 1" ADICIONAL POR TUBULAR PARA CORTE</p>
+                <p>5. TODAS LAS DIMENSIONES APLICAN DESPUÉS DEL CORTE</p>
+                <p>6. VERIFICAR MEDIDAS ANTES DE CORTAR</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Variables globales
+        let cuts = [];
+        let optimizationResults = null;
+        let chart = null;
+        let sortState = { column: null, direction: 'asc' };
+        const { jsPDF } = window.jspdf;
+        
+        // Elementos del DOM
+        const tubeLengthInput = document.getElementById('tubeLength');
+        const cutLengthInput = document.getElementById('cutLength');
+        const cutQuantityInput = document.getElementById('cutQuantity');
+        const addCutBtn = document.getElementById('addCut');
+        const optimizeBtn = document.getElementById('optimize');
+        const resetBtn = document.getElementById('reset');
+        const exportPdfBtn = document.getElementById('exportPdf');
+        const resultsDiv = document.getElementById('results');
+        const cutsTableBody = document.getElementById('cutsTableBody');
+        const summaryDiv = document.getElementById('summary');
+        const tubeVisualizationsDiv = document.getElementById('tubeVisualizations');
+        const sortableHeaders = document.querySelectorAll('.cuts-table .sortable');
+        const saveCutsBtn = document.getElementById('saveCuts');
+        const loadCutsBtn = document.getElementById('loadCuts');
+        const loadPdfBtn = document.getElementById('loadPdf');
+        const loadFileInput = document.getElementById('loadFile');
+        const pdfFileInput = document.getElementById('pdfFileInput');
+        
+        
+        // Event listeners
+        addCutBtn.addEventListener('click', addCut);
+        optimizeBtn.addEventListener('click', optimizeCuts);
+        resetBtn.addEventListener('click', resetAll);
+        exportPdfBtn?.addEventListener('click', exportToPdf);
+        sortableHeaders.forEach(header => {
+            header.addEventListener('click', () => {
+                const column = header.dataset.sort;
+                sortTable(column);
+            });
+        });
+        saveCutsBtn.addEventListener('click', saveCutsList);
+        loadCutsBtn.addEventListener('click', () => loadFileInput.click());
+        loadFileInput.addEventListener('change', loadCutsList);
+        loadPdfBtn.addEventListener('click', () => pdfFileInput.click());
+        pdfFileInput.addEventListener('change', handlePdfUpload);
+        
+        // Funciones de ordenamiento
+        function sortTable(column) {
+            if (cuts.length < 2) return;
+
+            if (sortState.column === column) {
+                sortState.direction = sortState.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                sortState.column = column;
+                sortState.direction = 'asc';
+            }
+
+            cuts.sort((a, b) => {
+                const valA = a[column];
+                const valB = b[column];
+                const order = sortState.direction === 'asc' ? 1 : -1;
+                return (valA < valB ? -1 : valA > valB ? 1 : 0) * order;
+            });
+
+            updateCutsList();
+            updateSortIndicators();
+        }
+
+        function updateSortIndicators() {
+            sortableHeaders.forEach(header => {
+                header.classList.remove('asc', 'desc');
+                if (header.dataset.sort === sortState.column) {
+                    header.classList.add(sortState.direction);
+                }
+            });
+        }
+        
+        // Funciones principales
+        function addCut() {
+            const length = parseFloat(cutLengthInput.value);
+            const quantity = parseInt(cutQuantityInput.value);
+            
+            if (isNaN(length) || length <= 0) {
+                alert('INGRESE UNA LONGITUD VÁLIDA');
+                return;
+            }
+            
+            if (isNaN(quantity) || quantity <= 0) {
+                alert('INGRESE UNA CANTIDAD VÁLIDA');
+                return;
+            }
+            
+            cuts.push({ length, quantity, description: 'Manual' });
+            updateCutsList();
+            cutLengthInput.value = '';
+            cutQuantityInput.value = '1';
+            cutLengthInput.focus();
+        }
+        
+        function updateCutsList() {
+            cutsTableBody.innerHTML = '';
+            
+            if (cuts.length === 0) {
+                const row = document.createElement('tr');
+                row.innerHTML = '<td colspan="6" style="text-align: center;">No hay cortes agregados</td>';
+                cutsTableBody.appendChild(row);
+                return;
+            }
+            
+            cuts.forEach((cut, index) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${index + 1}</td>
+                    <td>${cut.length}</td>
+                    <td>${cut.description || 'N/A'}</td>
+                    <td>${cut.quantity}</td>
+                    <td>${(cut.length * cut.quantity).toFixed(1)}</td>
+                    <td><button class="remove-btn" onclick="removeCut(${index})">Eliminar</button></td>
+                `;
+                cutsTableBody.appendChild(row);
+            });
+        }
+        
+        function removeCut(index) {
+            cuts.splice(index, 1);
+            updateCutsList();
+        }
+
+        function saveCutsList() {
+            if (cuts.length === 0) {
+                alert('No hay cortes en la lista para guardar.');
+                return;
+            }
+            const dataStr = JSON.stringify(cuts, null, 2);
+            const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+            
+            const exportFileDefaultName = `lista_cortes_${new Date().toISOString().slice(0,10)}.json`;
+            
+            const linkElement = document.createElement('a');
+            linkElement.setAttribute('href', dataUri);
+            linkElement.setAttribute('download', exportFileDefaultName);
+            document.body.appendChild(linkElement);
+            linkElement.click();
+            document.body.removeChild(linkElement);
+        }
+
+        function loadCutsList(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const loadedCuts = JSON.parse(e.target.result);
+                    if (!Array.isArray(loadedCuts) || (loadedCuts.length > 0 && !loadedCuts.every(item => 'length' in item && 'quantity' in item))) {
+                        throw new Error('El archivo no tiene el formato esperado (lista de cortes).');
+                    }
+                    cuts = loadedCuts;
+                    updateCutsList();
+                    alert(`Lista con ${cuts.length} tipos de corte cargada exitosamente.`);
+                } catch (error) {
+                    alert(`Error al cargar el archivo: ${error.message}`);
+                } finally {
+                    event.target.value = null;
+                }
+            };
+            reader.onerror = () => alert('No se pudo leer el archivo.');
+            reader.readAsText(file);
+        }
+        
+        /**
+         * Parsea una cadena que puede contener números enteros, decimales y fracciones (ej. "10 1/2")
+         * y la convierte a un número decimal. Es robusto ante espacios extra o guiones.
+         * @param {string} str La cadena a parsear.
+         * @returns {number} El número decimal o NaN si no es válido.
+         */
+        function parseLength(str) {
+            if (!str || typeof str !== 'string') return NaN;
+            
+            str = str.trim().replace('-', ' ');
+            const parts = str.split(' ').filter(p => p.length > 0);
+            if (parts.length === 0) return NaN;
+
+            let total = 0;
+            for (const part of parts) {
+                if (part.includes('/')) {
+                    const fractionParts = part.split('/');
+                    if (fractionParts.length === 2) {
+                        const num = parseFloat(fractionParts[0]);
+                        const den = parseFloat(fractionParts[1]);
+                        if (!isNaN(num) && !isNaN(den) && den !== 0) {
+                            total += num / den;
+                        } else return NaN; // Fracción inválida
+                    }
+                } else {
+                    const numPart = parseFloat(part);
+                    if (!isNaN(numPart)) total += numPart;
+                    else return NaN; // Parte numérica inválida
+                }
+            }
+            return total;
+        }
+
+         async function handlePdfUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            try {
+                showLoading('Leyendo PDF...');
+                
+                // Cargar PDF.js dinámicamente
+                const pdfjsLib = await loadPdfJs();
+                
+                // Leer el PDF
+                const pdf = await pdfjsLib.getDocument(URL.createObjectURL(file)).promise;
+                let allItems = [];
+                
+                // Extraer texto y su posición de todas las páginas
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const content = await page.getTextContent();
+                    allItems.push(...content.items);
+                }
+
+                // 1. Búsqueda de Encabezados más Inteligente
+                // Encuentra la fila de encabezados buscando una fila que contenga tanto "longitud" como "Cant."
+                let headerRowY = null;
+                const yCoords = [...new Set(allItems.map(it => it.transform[5]))]; // Coordenadas Y únicas
+
+                for (const y of yCoords) {
+                    const rowItems = allItems.filter(it => it.transform[5] === y);
+                    const hasLongitud = rowItems.some(it => it.str.toLowerCase().includes('longitud'));
+                    const hasCantidad = rowItems.some(it => it.str.toLowerCase().includes('cant'));
+                    if (hasLongitud && hasCantidad) {
+                        headerRowY = y;
+                        break;
+                    }
+                }
+
+                if (headerRowY === null) {
+                    hideLoading();
+                    alert('No se pudo encontrar la fila de encabezados con "longitud" y "Cant.".');
+                    return;
+                }
+
+                const headerItems = allItems.filter(item => item.transform[5] === headerRowY);
+                const longitudHeader = headerItems.find(item => item.str.toLowerCase().includes('longitud'));
+                const cantidadHeader = headerItems.find(item => item.str.toLowerCase().includes('cant'));
+                const descriptionHeader = headerItems.find(item => item.str.toLowerCase().includes('description'));
+
+                if (!descriptionHeader || !longitudHeader || !cantidadHeader) {
+                    hideLoading();
+                    alert('No se encontraron las columnas esenciales (Description, longitud, Cant.) en el PDF.');
+                    return;
+                }
+
+                // --- Lógica de Lectura de Tabla Mejorada ---
+
+                // 1. Mapear todas las columnas conocidas para reconstruir la estructura de la tabla.
+                const allKnownHeaders = ["section", "tag", "description", "material", "ancho", "alto", "grosor", "longitud", "cant"]; // Lista de encabezados a buscar
+                const foundHeaders = [];
+                let availableHeaderItems = [...headerItems]; // Copia de los items de la fila de encabezado para poder modificarla
+
+                allKnownHeaders.forEach(headerName => {
+                    // Usamos una expresión regular con límites de palabra (`\b`) para evitar coincidencias parciales (p. ej., "tag" en "voltage").
+                    const regex = new RegExp(`\\b${headerName}\\b`, 'i');
+                    let matchIndex = -1;
+
+                    // Buscamos en los encabezados disponibles.
+                    const headerItem = availableHeaderItems.find((item, index) => {
+                        if (regex.test(item.str)) {
+                            matchIndex = index;
+                            return true;
+                        }
+                        return false;
+                    });
+
+                    if (headerItem) {
+                        foundHeaders.push({
+                            name: headerName,
+                            header: headerItem
+                        });
+                        // Eliminamos el encabezado encontrado para que no pueda ser emparejado de nuevo por otro nombre de columna.
+                        availableHeaderItems.splice(matchIndex, 1);
+                    }
+                });
+
+                // Verificamos que las columnas esenciales para la app se hayan encontrado.
+                const essentialColumns = ['description', 'longitud', 'cant'];
+                const missing = essentialColumns.filter(c => !foundHeaders.some(h => h.name === c));
+                if (missing.length > 0) {
+                    hideLoading();
+                    alert(`Error de lectura: No se pudieron encontrar las columnas esenciales: ${missing.join(', ')}.`);
+                    return;
+                }
+
+                // Ordenar las columnas encontradas por su posición horizontal.
+                foundHeaders.sort((a, b) => a.header.transform[4] - b.header.transform[4]);
+
+                // 2. Calcular los límites (boundaries) de cada columna. El límite es el INICIO de la siguiente columna.
+                //    Esto crea fronteras precisas y evita que los datos de una columna se mezclen con otra.
+                // --- MEJORA: Se calcula el punto medio entre el final de una columna y el inicio de la siguiente.
+                // Esto es mucho más robusto si el contenido de las celdas no está perfectamente alineado con las cabeceras,
+                // como cuando una descripción es más ancha que su propio encabezado.
+                const boundaries = [];
+                for (let i = 0; i < foundHeaders.length - 1; i++) {
+                    const currentHeader = foundHeaders[i].header;
+                    const nextHeader = foundHeaders[i + 1].header;
+                    const currentHeaderEnd = currentHeader.transform[4] + currentHeader.width;
+                    const nextHeaderStart = nextHeader.transform[4];
+                    const midpoint = (currentHeaderEnd + nextHeaderStart) / 2;
+                    boundaries.push(midpoint);
+                }
+
+                // 2. Filtrado Explícito de la Fila de Encabezados y Agrupación de Datos
+                const dataItems = allItems.filter(item => item.transform[5] !== headerRowY);
+                const rows = {};
+                dataItems.forEach(item => {
+                    const y = item.transform[5];
+                    if (!rows[y]) rows[y] = [];
+                    rows[y].push(item);
+                });
+                const newCuts = [];
+
+                for (const y in rows) {
+                    const rowItems = rows[y];
+                    const classified = {};
+                    foundHeaders.forEach(h => classified[h.name] = []); // Inicializar arrays para todas las columnas encontradas
+
+                    // 3. Clasificar cada fragmento de texto de la fila en su columna correspondiente
+                    //    basándose en los límites que calculamos.
+                    rowItems.forEach(item => {
+                        const x = item.transform[4];
+                        let columnIndex = boundaries.findIndex(boundary => x < boundary);
+                        
+                        if (columnIndex === -1) {
+                            // Si no está antes de ningún límite, pertenece a la última columna.
+                            columnIndex = foundHeaders.length - 1;
+                        }
+                        
+                        const columnName = foundHeaders[columnIndex].name;
+                        // Solo nos interesan los datos de estas tres columnas para el resultado final,
+                        // pero clasificamos todo para mantener la estructura.
+                        if (classified[columnName]) {
+                            classified[columnName].push(item);
+                        }
+                    });
+
+                    // 4. Reconstruir los valores de cada columna a partir de sus fragmentos.
+                    const description = classified.description.sort((a, b) => a.transform[4] - b.transform[4]).map(item => item.str.trim()).join(' ');
+                    const lengthStr = classified.longitud.sort((a, b) => a.transform[4] - b.transform[4]).map(item => item.str.trim()).join(' ');
+                    const quantityStr = classified.cant ? classified.cant.sort((a, b) => a.transform[4] - b.transform[4]).map(item => item.str.trim()).join('') : '';
+
+                    // Usar la nueva función para parsear longitudes que pueden incluir fracciones.
+                    const length = parseLength(lengthStr);
+                    const quantity = parseInt(quantityStr);
+
+                    // 5. Agregar el corte a la lista si los datos numéricos son válidos y la descripción no está vacía.
+                    if (!isNaN(length) && !isNaN(quantity) && length > 0 && quantity > 0) {
+                        newCuts.push({
+                            length: length,
+                            quantity: quantity,
+                            description: description || 'N/A'
+                        });
+                    }
+                }
+hideLoading();
+                if (newCuts.length > 0) {
+                     showPdfPreviewModal(newCuts);
+                } else {
+                    alert('No se encontraron datos de cortes válidos en el PDF.');
+                }
+            } catch (error) {
+                hideLoading();
+                console.error("Error al procesar PDF:", error);
+                alert(`Error al leer el PDF: ${error.message}`);
+            } finally {
+                event.target.value = null; // Permite cargar el mismo archivo de nuevo
+            }
+        }
+        
+        function escapeAttr(str) {
+            return str.toString().replace(/"/g, '&quot;');
+        }
+
+        function showPdfPreviewModal(foundCuts) {
+            // Crear el overlay del modal
+            const modalOverlay = document.createElement('div');
+            modalOverlay.className = 'modal-overlay';
+            modalOverlay.id = 'pdfPreviewModal';
+
+            // Crear el contenido del modal
+            const modalContent = document.createElement('div');
+            modalContent.className = 'modal-content';
+
+            // Crear el encabezado
+            modalContent.innerHTML = `
+                <div class="modal-header">
+                    <h2>Cortes Encontrados en el PDF</h2>
+                    <p>Seleccione los materiales que desea agregar a la lista de cortes.</p>
+                </div>
+            `;
+
+            // Crear el cuerpo con la tabla
+            const modalBody = document.createElement('div');
+            modalBody.className = 'modal-body';
+            let tableHtml = `<table class="cuts-table"><thead><tr>
+                <th style="width: 5%;"><input type="checkbox" id="selectAllCheckbox" title="Seleccionar Todo" checked></th>
+                <th>Descripción</th><th style="width: 15%;">Longitud</th><th style="width: 15%;">Cantidad</th><th style="width: 10%;">Acción</th>
+            </tr></thead><tbody id="pdfPreviewTableBody">`;
+
+            foundCuts.forEach((cut, index) => {
+                tableHtml += `
+                    <tr>
+                        <td><input type="checkbox" class="cut-checkbox" data-index="${index}" checked></td>
+                        <td><input type="text" class="description-input" value="${escapeAttr(cut.description)}"></td>
+                        <td><input type="number" class="length-input" value="${cut.length}" step="0.001"></td>
+                        <td><input type="number" class="quantity-input" value="${cut.quantity}" step="1"></td>
+                        <td></td>
+                    </tr>`;
+            });
+            tableHtml += `</tbody></table>`;
+            modalBody.innerHTML = tableHtml;
+            modalContent.appendChild(modalBody);
+
+            // Crear el pie de página con botones
+            const modalFooter = document.createElement('div');
+            modalFooter.className = 'modal-footer';
+            modalFooter.innerHTML = ` <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
+                <button id="addNewRow" class="secondary-btn" style="background-color: #3498db; width: auto; padding: 10px 20px;">Agregar Fila</button>
+                <div>
+                <button id="cancelAdd" class="remove-btn" style="width: auto; padding: 10px 20px;">Cancelar</button>
+                <button id="confirmAdd" class="save-btn" style="width: auto; padding: 10px 20px;">Agregar Seleccionados</button>
+                </div>
+            </div>
+            `;
+            modalContent.appendChild(modalFooter);
+
+            // Ensamblar y mostrar el modal
+            modalOverlay.appendChild(modalContent);
+            document.body.appendChild(modalOverlay);
+
+            // Lógica de los botones y checkboxes
+            document.getElementById('selectAllCheckbox').addEventListener('change', e => 
+                document.querySelectorAll('.cut-checkbox').forEach(cb => cb.checked = e.target.checked)
+            );
+            document.getElementById('addNewRow').addEventListener('click', () => {
+                const tbody = document.getElementById('pdfPreviewTableBody');
+                const newRow = document.createElement('tr');
+                newRow.innerHTML = `
+                    <td><input type="checkbox" class="cut-checkbox" checked></td>
+                    <td><input type="text" class="description-input" placeholder="Descripción Manual"></td>
+                    <td><input type="number" class="length-input" placeholder="0.0" step="0.001"></td>
+                    <td><input type="number" class="quantity-input" placeholder="1" step="1"></td>
+                    <td><button class="remove-btn" style="padding: 2px 5px; font-size: 10px;" onclick="this.closest('tr').remove()">X</button></td>
+                `;
+                tbody.appendChild(newRow);
+            });
+            document.getElementById('cancelAdd').addEventListener('click', () => modalOverlay.remove());
+            document.getElementById('confirmAdd').addEventListener('click', () => {
+                const tubeLength = parseFloat(tubeLengthInput.value);
+                const selectedCuts = [];
+                let hasError = false;
+
+                // Resetear estilos de error previos
+                document.querySelectorAll('.modal-body input').forEach(input => input.style.border = '1px solid #ccc');
+
+                for (const cb of document.querySelectorAll('.cut-checkbox:checked')) {
+                    const row = cb.closest('tr');
+                    const descriptionInput = row.querySelector('.description-input');
+                    const lengthInput = row.querySelector('.length-input');
+                    const quantityInput = row.querySelector('.quantity-input');
+
+                    if (descriptionInput && lengthInput && quantityInput) {
+                        const description = descriptionInput.value.trim();
+                        const length = parseFloat(lengthInput.value);
+                        const quantity = parseInt(quantityInput.value);
+
+                        if (description && !isNaN(length) && length > 0 && !isNaN(quantity) && quantity > 0) {
+                            // Poka-Yoke: Verificar que la longitud del corte no sea mayor que la del tubular.
+                            if (!isNaN(tubeLength) && length > tubeLength) {
+                                alert(`ERROR (POKA-YOKE) EN FILA:\n\n"${description}"\n\nLa longitud del corte (${length}") no puede ser mayor que la del tubular (${tubeLength}").`);
+                                lengthInput.focus();
+                                lengthInput.style.border = '2px solid var(--asme-red)';
+                                hasError = true;
+                                break; // Detener la validación al primer error
+                            }
+                            selectedCuts.push({ length, quantity, description });
+                        }
+                    }
+                }
+
+                if (hasError) {
+                    return; // No cerrar el modal si hay un error
+                }
+
+                if (selectedCuts.length > 0) {
+                    cuts.push(...selectedCuts);
+                    updateCutsList();
+                    alert(`${selectedCuts.length} tipos de corte han sido agregados a la lista.`);
+                }
+                modalOverlay.remove();
+            });
+        }
+
+        function loadPdfJs() {
+            return new Promise((resolve, reject) => {
+                if (window.pdfjsLib) {
+                    resolve(window.pdfjsLib);
+                    return;
+                }
+                
+                const script = document.createElement('script');
+                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js';
+                script.onload = () => {
+                    window.pdfjsLib.GlobalWorkerOptions.workerSrc = 
+                        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';
+                    resolve(window.pdfjsLib);
+                };
+                script.onerror = () => {
+                    reject(new Error('Error al cargar PDF.js'));
+                };
+                document.head.appendChild(script);
+            });
+        }
+        
+        function showLoading(message) {
+            const loadingDiv = document.createElement('div');
+            loadingDiv.id = 'loadingOverlay';
+            loadingDiv.style.position = 'fixed';
+            loadingDiv.style.top = '0';
+            loadingDiv.style.left = '0';
+            loadingDiv.style.width = '100%';
+            loadingDiv.style.height = '100%';
+            loadingDiv.style.backgroundColor = 'rgba(0,0,0,0.7)';
+            loadingDiv.style.display = 'flex';
+            loadingDiv.style.justifyContent = 'center';
+            loadingDiv.style.alignItems = 'center';
+            loadingDiv.style.zIndex = '1000';
+            loadingDiv.style.color = 'white';
+            loadingDiv.style.fontSize = '20px';
+            loadingDiv.innerHTML = `<div>${message}</div>`;
+            document.body.appendChild(loadingDiv);
+        }
+        
+        function hideLoading() {
+            const loadingDiv = document.getElementById('loadingOverlay');
+            if (loadingDiv) {
+                loadingDiv.remove();
+            }
+        }
+        
+        function optimizeCuts() {
+            const tubeLength = parseFloat(tubeLengthInput.value);
+            if (isNaN(tubeLength) || tubeLength <= 0) {
+                alert('INGRESE UNA LONGITUD DE TUBULAR VÁLIDA');
+                return;
+            }
+            if (cuts.length === 0) {
+                alert('AGREGUE AL MENOS UN CORTE');
+                return;
+            }
+ 
+            // 1. Agrupar los cortes por descripción.
+            const cutsByDescription = {};
+            cuts.forEach(cut => {
+                const desc = cut.description || 'Manual';
+                if (!cutsByDescription[desc]) {
+                    cutsByDescription[desc] = [];
+                }
+                cutsByDescription[desc].push(cut);
+            });
+
+            let allOptimizedTubes = [];
+
+            // 2. Iterar sobre cada grupo de descripción y optimizarlo de forma independiente.
+            for (const description in cutsByDescription) {
+                const descriptionCuts = cutsByDescription[description];
+                
+                // a. Generar lista plana de cortes para esta descripción.
+                let individualCuts = [];
+                descriptionCuts.forEach(cut => {
+                    for (let i = 0; i < cut.quantity; i++) {
+                        individualCuts.push({ length: cut.length, description: description });
+                    }
+                });
+
+                // b. Ordenar de mayor a menor.
+                individualCuts.sort((a, b) => b.length - a.length);
+
+                // c. Algoritmo First-Fit Decreasing para esta descripción.
+                let tubesForThisDescription = [];
+                individualCuts.forEach(cut => {
+                    let placed = false;
+                    for (let i = 0; i < tubesForThisDescription.length; i++) {
+                        if (tubesForThisDescription[i].remaining >= cut.length) {
+                            tubesForThisDescription[i].cuts.push(cut);
+                            tubesForThisDescription[i].remaining -= cut.length;
+                            placed = true;
+                            break;
+                        }
+                    }
+                    if (!placed) {
+                        tubesForThisDescription.push({
+                            cuts: [cut],
+                            remaining: tubeLength - cut.length
+                        });
+                    }
+                });
+                
+                // d. Agregar los tubos optimizados de esta descripción a la lista global.
+                allOptimizedTubes.push(...tubesForThisDescription);
+            }
+
+            const tubes = allOptimizedTubes;
+
+            // 3. Calcular métricas globales
+            const totalTubes = tubes.length;
+            const totalUsed = tubes.reduce((sum, tube) => sum + (tubeLength - tube.remaining), 0);
+            const totalYield = tubes.reduce((sum, tube) => sum + tube.remaining, 0);
+            const totalAvailable = totalTubes * tubeLength;
+            const efficiency = totalAvailable > 0 ? (totalUsed / totalAvailable) * 100 : 0;
+            const totalInches = totalTubes * tubeLength;
+            const totalInchesWithKerf = totalInches + totalTubes;
+            const totalFeetWithKerf = totalInchesWithKerf / 12;
+
+            // 4. Calcular métricas por descripción (lógica simplificada para tubos no mixtos)
+            const summaryByDescription = {};
+            Object.keys(cutsByDescription).forEach(desc => {
+                summaryByDescription[desc] = { used: 0, yield: 0, tubeCount: 0, cutCount: 0 };
+            });
+
+            tubes.forEach(tube => {
+                // Como los tubos ya no se mezclan, todos los cortes en un tubo
+                // pertenecen a la misma descripción. Podemos tomarla del primer corte.
+                if (tube.cuts.length > 0) {
+                    const desc = tube.cuts[0].description;
+                    const usedInTube = tube.cuts.reduce((sum, cut) => sum + cut.length, 0);
+                    
+                    if (summaryByDescription[desc]) {
+                        summaryByDescription[desc].used += usedInTube;
+                        summaryByDescription[desc].yield += tube.remaining;
+                        summaryByDescription[desc].tubeCount += 1;
+                        summaryByDescription[desc].cutCount += tube.cuts.length;
+                    }
+                }
+            });
+
+            // 6. Guardar resultados finales.
+            optimizationResults = {
+                tubes, tubeLength, totalTubes, totalUsed, totalYield, efficiency,
+                totalInches, totalInchesWithKerf, totalFeetWithKerf, summaryByDescription
+            };
+            showResults();
+        }
+        
+
+        function showResults() {
+            resultsDiv.style.display = 'block';
+            updateSummary();
+            renderAsmeChart();
+            renderEngineeringTubeVisualizations();
+        }
+        
+        function updateSummary() {
+            const { 
+                tubeLength, 
+                totalTubes, 
+                totalUsed, 
+                totalYield, 
+                efficiency, 
+                totalInches,
+                totalInchesWithKerf,
+                totalFeetWithKerf,
+                summaryByDescription
+            } = optimizationResults;
+            
+            summaryDiv.innerHTML = `
+                <div class="summary-item">
+                    <span>Longitud de tubulares:</span>
+                    <strong>${tubeLength.toFixed(1)}"</strong>
+                </div>
+                <div class="summary-item">
+                    <span>Tubulares necesarios:</span>
+                    <strong>${totalTubes}</strong>
+                </div>
+                <div class="summary-item">
+                    <span>Total pulgadas utilizadas:</span>
+                    <strong>${totalUsed.toFixed(1)}"</strong>
+                </div>
+                <div class="summary-item">
+                    <span>Total pulgadas yield:</span>
+                    <strong>${totalYield.toFixed(1)}"</strong>
+                </div>
+                <div class="summary-item">
+                    <span>Eficiencia:</span>
+                    <strong>${efficiency.toFixed(1)}%</strong>
+                </div>
+                <div class="summary-item highlight">
+                    <span>Total pulgadas (tubos completos):</span>
+                    <strong>${totalInches.toFixed(1)}"</strong>
+                </div>
+                <div class="summary-item highlight">
+                    <span>+ 1" por tubular (corte):</span>
+                    <strong>${totalTubes}"</strong>
+                </div>
+                <div class="summary-item highlight">
+                    <span>Total general con corte:</span>
+                    <strong>${totalInchesWithKerf.toFixed(1)}"</strong>
+                </div>
+                <div class="summary-item highlight">
+                    <span>Total en pies (con corte):</span>
+                    <strong>${totalFeetWithKerf.toFixed(2)} FT</strong>
+                </div>
+            `;
+
+            // Limpiar el desglose anterior si existe
+            const existingBreakdownCard = document.getElementById('breakdownCard');
+            if (existingBreakdownCard) {
+                existingBreakdownCard.remove();
+            }
+
+            // Agregar nuevo desglose de eficiencia por descripción en una tabla
+            let breakdownHtml = '<div class="summary-card" id="breakdownCard" style="grid-column: 1 / -1; margin-top: 20px;">';
+            breakdownHtml += '<h2>DESGLOSE DE EFICIENCIA POR DESCRIPCIÓN</h2>';
+            breakdownHtml += `<table class="cuts-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 20%;">Descripción</th>
+                                        <th>Cortes</th>
+                                        <th>Mat. Usado (FT)</th>
+                                        <th>Tubulares (${(tubeLength/12).toFixed(0)}')</th>
+                                        <th>Tubulares 20FT</th>
+                                        <th>Tubulares (40')</th>
+                                        <th>Tubulares 40FT</th>
+                                        <th>Yield de 20FT</th>
+                                        <th>Yield de 40FT</th>
+                                    </tr>
+                                </thead>
+                                <tbody>`;
+
+            const sortedDescriptions = Object.entries(summaryByDescription)
+                .filter(([_, data]) => data.used > 0 || data.yield > 0) // Mostrar solo descripciones con actividad
+                .sort((a, b) => b[1].used - a[1].used); // Ordenar por el material más utilizado
+
+            for (const [description, data] of sortedDescriptions) {
+                const { used, tubeCount, cutCount } = data;
+                const usedInFeet = used / 12;
+                const totalLinearFeetFromOpt = (tubeCount * tubeLength) / 12;
+
+                // Cálculos para tubulares hipotéticos de 40 FT
+                // Se basa en el total de pies lineales que la optimización original requirió.
+                const needed40FtTubes = totalLinearFeetFromOpt > 0 ? Math.ceil(totalLinearFeetFromOpt / 40) : 0;
+                const totalLinearFeetFrom40FtTubes = needed40FtTubes * 40;
+
+                // Cálculo de "Yield" (eficiencia) como decimal
+                const yield20Ft = totalLinearFeetFromOpt > 0 ? (usedInFeet / totalLinearFeetFromOpt) : 0;
+                const yield40Ft = totalLinearFeetFrom40FtTubes > 0 ? (usedInFeet / totalLinearFeetFrom40FtTubes) : 0;
+
+                breakdownHtml += `
+                    <tr>
+                        <td><strong>${description}</strong></td>
+                        <td><strong>${cutCount}</strong></td>
+                        <td>${usedInFeet.toFixed(2)} FT</td>
+                        <td><strong>${tubeCount}</strong></td>
+                        <td><strong>${totalLinearFeetFromOpt.toFixed(2)} FT</strong></td>
+                        <td><strong>${needed40FtTubes}</strong></td>
+                        <td><strong>${totalLinearFeetFrom40FtTubes.toFixed(2)} FT</strong></td>
+                        <td><strong>${yield20Ft.toFixed(4).replace(/^0\./, '.')}</strong></td>
+                        <td><strong>${yield40Ft.toFixed(4).replace(/^0\./, '.')}</strong></td>
+                    </tr>`;
+            }
+
+            breakdownHtml += `</tbody></table></div>`;
+            summaryDiv.insertAdjacentHTML('afterend', breakdownHtml);
+        }
+        
+        function renderAsmeChart() {
+            const ctx = document.getElementById('optimizationChart').getContext('2d');
+            
+            if (chart) {
+                chart.destroy();
+            }
+            
+            const { totalUsed, totalYield, tubeLength, totalTubes } = optimizationResults;
+            const totalAvailable = totalTubes * tubeLength;
+            
+            Chart.defaults.borderColor = '#ddd';
+            Chart.defaults.color = '#333';
+            
+            chart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['MATERIAL UTILIZADO', 'YIELD'],
+                    datasets: [{
+                        data: [totalUsed, totalYield],
+                        backgroundColor: ['rgba(0, 51, 102, 0.8)', 'rgba(192, 0, 0, 0.8)'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '70%',
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            labels: {
+                                font: {
+                                    size: 14,
+                                    weight: 'bold'
+                                },
+                                padding: 20,
+                                usePointStyle: true,
+                                pointStyle: 'rectRounded'
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const value = context.raw;
+                                    const percentage = (value / totalAvailable * 100).toFixed(1);
+                                    return ` ${context.label}: ${value.toFixed(1)}" (${percentage}%)`;
+                                }
+                            },
+                            bodyFont: {
+                                weight: 'bold',
+                                size: 14
+                            },
+                            displayColors: true,
+                            usePointStyle: true
+                        },
+                        title: {
+                            display: true,
+                            text: 'DISTRIBUCIÓN DE MATERIAL - ASME Y14.5',
+                            font: {
+                                size: 16,
+                                weight: 'bold'
+                            },
+                            padding: {
+                                top: 10,
+                                bottom: 30
+                            }
+                        }
+                    },
+                    elements: {
+                        arc: {
+                            borderWidth: 0
+                        }
+                    }
+                }
+            });
+        }
+        
+                function renderEngineeringTubeVisualizations() {
+            const { tubes, tubeLength } = optimizationResults;
+            tubeVisualizationsDiv.innerHTML = '';
+
+            tubes.forEach((tube, index) => {
+                const tubeDiv = document.createElement('div');
+                tubeDiv.className = 'engineering-drawing';
+
+                // Identificar los materiales únicos en este tubular
+                const materialTypesInTube = [...new Set(tube.cuts.map(c => c.description || 'Manual'))].join(', ');
+                
+                // Título del dibujo de ingeniería
+                const titleDiv = document.createElement('div');
+                titleDiv.className = 'drawing-title';
+                titleDiv.innerHTML = `
+                    TUBULAR ${index + 1} - LONGITUD TOTAL: ${tubeLength.toFixed(1)}"
+                    <br><span style="font-size: 12px; color: #555;">Material(es): ${materialTypesInTube}</span>
+                `;
+                tubeDiv.appendChild(titleDiv);
+                
+                // Contenedor SVG con borde de dibujo
+                const svgContainer = document.createElement('div');
+                svgContainer.className = 'drawing-border';
+                
+                const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                svg.setAttribute('width', '100%');
+                svg.setAttribute('height', '150');
+                svg.setAttribute('viewBox', `0 0 1000 150`);
+                
+                // Dibujar tubular base
+                const tubeRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                tubeRect.setAttribute('x', '50');
+                tubeRect.setAttribute('y', '60');
+                tubeRect.setAttribute('width', '900');
+                tubeRect.setAttribute('height', '30');
+                tubeRect.setAttribute('fill', 'none');
+                tubeRect.setAttribute('stroke', 'var(--asme-line)');
+                tubeRect.setAttribute('stroke-width', '1');
+                svg.appendChild(tubeRect);
+                
+                // Líneas de extremo
+                const leftEndLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                leftEndLine.setAttribute('x1', '50');
+                leftEndLine.setAttribute('y1', '50');
+                leftEndLine.setAttribute('x2', '50');
+                leftEndLine.setAttribute('y2', '100');
+                leftEndLine.setAttribute('stroke', 'var(--asme-line)');
+                leftEndLine.setAttribute('stroke-width', '1.5');
+                svg.appendChild(leftEndLine);
+                
+                const rightEndLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                rightEndLine.setAttribute('x1', '950');
+                rightEndLine.setAttribute('y1', '50');
+                rightEndLine.setAttribute('x2', '950');
+                rightEndLine.setAttribute('y2', '100');
+                rightEndLine.setAttribute('stroke', 'var(--asme-line)');
+                rightEndLine.setAttribute('stroke-width', '1.5');
+                svg.appendChild(rightEndLine);
+                
+                // Dibujar cortes
+                let x = 50;
+                const scale = 900 / tubeLength;
+                
+                tube.cuts.forEach((cut, i) => {
+                    const cutWidth = cut.length * scale;
+                    
+                    // Línea divisoria entre cortes
+                    if (i > 0) {
+                        const dividerLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                        dividerLine.setAttribute('x1', x);
+                        dividerLine.setAttribute('y1', '60');
+                        dividerLine.setAttribute('x2', x);
+                        dividerLine.setAttribute('y2', '90');
+                        dividerLine.setAttribute('stroke', 'var(--asme-line)');
+                        dividerLine.setAttribute('stroke-width', '0.5');
+                        dividerLine.setAttribute('stroke-dasharray', '5,3');
+                        svg.appendChild(dividerLine);
+                    }
+                    
+                    // Líneas de dimensión
+                    if (cutWidth > 20) {
+                        // Líneas de extensión
+                        const extLineTop = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                        extLineTop.setAttribute('x1', x);
+                        extLineTop.setAttribute('y1', '40');
+                        extLineTop.setAttribute('x2', x);
+                        extLineTop.setAttribute('y2', '50');
+                        extLineTop.setAttribute('class', 'extension-line');
+                        svg.appendChild(extLineTop);
+                        
+                        const extLineBottom = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                        extLineBottom.setAttribute('x1', x + cutWidth);
+                        extLineBottom.setAttribute('y1', '40');
+                        extLineBottom.setAttribute('x2', x + cutWidth);
+                        extLineBottom.setAttribute('y2', '50');
+                        extLineBottom.setAttribute('class', 'extension-line');
+                        svg.appendChild(extLineBottom);
+                        
+                        // Línea de dimensión
+                        const dimLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                        dimLine.setAttribute('x1', x);
+                        dimLine.setAttribute('y1', '45');
+                        dimLine.setAttribute('x2', x + cutWidth);
+                        dimLine.setAttribute('y2', '45');
+                        dimLine.setAttribute('class', 'dimension-line');
+                        svg.appendChild(dimLine);
+                        
+                        // Flechas
+                        const arrowLeft = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                        arrowLeft.setAttribute('d', `M${x},45 L${x+5},40 L${x+5},50 Z`);
+                        arrowLeft.setAttribute('fill', 'var(--asme-line)');
+                        svg.appendChild(arrowLeft);
+                        
+                        const arrowRight = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                        arrowRight.setAttribute('d', `M${x+cutWidth},45 L${x+cutWidth-5},40 L${x+cutWidth-5},50 Z`);
+                        arrowRight.setAttribute('fill', 'var(--asme-line)');
+                        svg.appendChild(arrowRight);
+                        
+                        // Texto de dimensión
+                        const dimText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                        dimText.setAttribute('x', x + cutWidth/2);
+                        dimText.setAttribute('y', '35');
+                        dimText.setAttribute('class', 'dimension-text');
+                        dimText.setAttribute('text-anchor', 'middle');
+                        dimText.textContent = `${cut.length.toFixed(1)}"`;
+                        svg.appendChild(dimText);
+                    }
+                    
+                    x += cutWidth;
+                });
+                
+                // Dibujar yield si hay
+                if (tube.remaining > 0) {
+                    const yieldWidth = tube.remaining * scale;
+                    
+                    // Línea divisoria
+                    const yieldDivider = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                    yieldDivider.setAttribute('x1', x);
+                    yieldDivider.setAttribute('y1', '60');
+                    yieldDivider.setAttribute('x2', x);
+                    yieldDivider.setAttribute('y2', '90');
+                    yieldDivider.setAttribute('stroke', 'var(--asme-line)');
+                    yieldDivider.setAttribute('stroke-width', '0.5');
+                    yieldDivider.setAttribute('stroke-dasharray', '5,3');
+                    svg.appendChild(yieldDivider);
+                    
+                    // Líneas de dimensión para yield
+                    if (yieldWidth > 20) {
+                        // Líneas de extensión
+                        const extLineTop = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                        extLineTop.setAttribute('x1', x);
+                        extLineTop.setAttribute('y1', '40');
+                        extLineTop.setAttribute('x2', x);
+                        extLineTop.setAttribute('y2', '50');
+                        extLineTop.setAttribute('class', 'extension-line');
+                        svg.appendChild(extLineTop);
+                        
+                        const extLineBottom = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                        extLineBottom.setAttribute('x1', x + yieldWidth);
+                        extLineBottom.setAttribute('y1', '40');
+                        extLineBottom.setAttribute('x2', x + yieldWidth);
+                        extLineBottom.setAttribute('y2', '50');
+                        extLineBottom.setAttribute('class', 'extension-line');
+                        svg.appendChild(extLineBottom);
+                        
+                        // Línea de dimensión
+                        const yieldLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                        yieldLine.setAttribute('x1', x);
+                        yieldLine.setAttribute('y1', '45');
+                        yieldLine.setAttribute('x2', x + yieldWidth);
+                        yieldLine.setAttribute('y2', '45');
+                        yieldLine.setAttribute('class', 'dimension-line');
+                        svg.appendChild(yieldLine);
+                        
+                        // Flechas
+                        const arrowLeft = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                        arrowLeft.setAttribute('d', `M${x},45 L${x+5},40 L${x+5},50 Z`);
+                        arrowLeft.setAttribute('fill', 'var(--asme-line)');
+                        svg.appendChild(arrowLeft);
+                        
+                        const arrowRight = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                        arrowRight.setAttribute('d', `M${x+yieldWidth},45 L${x+yieldWidth-5},40 L${x+yieldWidth-5},50 Z`);
+                        arrowRight.setAttribute('fill', 'var(--asme-line)');
+                        svg.appendChild(arrowRight);
+                        
+                        // Texto de dimensión
+                        const yieldText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                        yieldText.setAttribute('x', x + yieldWidth/2);
+                        yieldText.setAttribute('y', '35');
+                        yieldText.setAttribute('class', 'dimension-text');
+                        yieldText.setAttribute('text-anchor', 'middle');
+                        yieldText.textContent = `YIELD: ${tube.remaining.toFixed(1)}"`;
+                        svg.appendChild(yieldText);
+                    }
+                }
+                
+                // Línea de longitud total
+                const totalExtLeft = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                totalExtLeft.setAttribute('x1', '50');
+                totalExtLeft.setAttribute('y1', '110');
+                totalExtLeft.setAttribute('x2', '50');
+                totalExtLeft.setAttribute('y2', '120');
+                totalExtLeft.setAttribute('class', 'extension-line');
+                svg.appendChild(totalExtLeft);
+                
+                const totalExtRight = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                totalExtRight.setAttribute('x1', '950');
+                totalExtRight.setAttribute('y1', '110');
+                totalExtRight.setAttribute('x2', '950');
+                totalExtRight.setAttribute('y2', '120');
+                totalExtRight.setAttribute('class', 'extension-line');
+                svg.appendChild(totalExtRight);
+                
+                const totalLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                totalLine.setAttribute('x1', '50');
+                totalLine.setAttribute('y1', '115');
+                totalLine.setAttribute('x2', '950');
+                totalLine.setAttribute('y2', '115');
+                totalLine.setAttribute('class', 'dimension-line');
+                svg.appendChild(totalLine);
+                
+                const totalArrowLeft = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                totalArrowLeft.setAttribute('d', 'M50,115 L55,110 L55,120 Z');
+                totalArrowLeft.setAttribute('fill', 'var(--asme-line)');
+                svg.appendChild(totalArrowLeft);
+                
+                const totalArrowRight = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                totalArrowRight.setAttribute('d', 'M950,115 L945,110 L945,120 Z');
+                totalArrowRight.setAttribute('fill', 'var(--asme-line)');
+                svg.appendChild(totalArrowRight);
+                
+                const totalText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                totalText.setAttribute('x', '500');
+                totalText.setAttribute('y', '130');
+                totalText.setAttribute('class', 'dimension-text');
+                totalText.setAttribute('text-anchor', 'middle');
+                totalText.textContent = `LONGITUD TOTAL: ${tubeLength.toFixed(1)}"`;
+                svg.appendChild(totalText);
+                
+                const efficiency = ((tubeLength - tube.remaining) / tubeLength * 100).toFixed(1);
+                const efficiencyText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                efficiencyText.setAttribute('x', '900');
+                efficiencyText.setAttribute('y', '140');
+                efficiencyText.setAttribute('class', 'dimension-text');
+                efficiencyText.setAttribute('text-anchor', 'end');
+                efficiencyText.setAttribute('font-weight', 'bold');
+                efficiencyText.textContent = `EFICIENCIA: ${efficiency}%`;
+                svg.appendChild(efficiencyText);
+                
+                svgContainer.appendChild(svg);
+                tubeDiv.appendChild(svgContainer);
+                tubeVisualizationsDiv.appendChild(tubeDiv);
+            });
+        }
+        
+        
+        async function exportToPdf() {
+            // Crear un nuevo PDF
+            const doc = new jsPDF('p', 'mm', 'a4');
+            
+            // Título del documento
+            doc.setFontSize(18);
+            doc.setTextColor(0, 51, 102);
+            doc.text('REPORTE DE OPTIMIZACIÓN DE CORTES', 105, 20, { align: 'center' });
+            
+            // Configuración
+            doc.setFontSize(12);
+            doc.setTextColor(0, 0, 0);
+            
+            // Agregar fecha
+            const today = new Date();
+            doc.text(`Fecha: ${today.toLocaleDateString()}`, 15, 30);
+            
+            // Agregar resumen
+            doc.setFontSize(14);
+            doc.text('RESUMEN DE OPTIMIZACIÓN', 15, 45);
+            doc.setFontSize(12);
+            
+            const { 
+                tubeLength, 
+                totalTubes, 
+                totalUsed, 
+                totalYield, 
+                efficiency, 
+                totalInches,
+                totalInchesWithKerf,
+                totalFeetWithKerf
+            } = optimizationResults;
+            
+            let yPosition = 55;
+            
+            // Función para agregar línea de resumen
+            const addSummaryLine = (label, value) => {
+                doc.text(label, 20, yPosition);
+                doc.text(value, 180, yPosition, { align: 'right' });
+                yPosition += 7;
+            };
+            
+            addSummaryLine('Longitud de tubulares:', `${tubeLength.toFixed(1)}"`);
+            addSummaryLine('Tubulares necesarios:', totalTubes.toString());
+            addSummaryLine('Total pulgadas utilizadas:', `${totalUsed.toFixed(1)}"`);
+            addSummaryLine('Total pulgadas yield:', `${totalYield.toFixed(1)}"`);
+            addSummaryLine('Eficiencia:', `${efficiency.toFixed(1)}%`);
+            
+            // Sección de cálculo con corte
+            yPosition += 5;
+            doc.setFontSize(12);
+            doc.setTextColor(0, 51, 102);
+            doc.text('CÁLCULO DE MATERIAL TOTAL (CON CORTE):', 15, yPosition);
+            yPosition += 7;
+            doc.setTextColor(0, 0, 0);
+            
+            addSummaryLine('Total pulgadas (tubos completos):', `${totalInches.toFixed(1)}"`);
+            addSummaryLine('+ 1" por tubular (corte):', `${totalTubes}"`);
+            addSummaryLine('Total general con corte:', `${totalInchesWithKerf.toFixed(1)}"`);
+            addSummaryLine('Total en pies (con corte):', `${totalFeetWithKerf.toFixed(2)} FT`);
+            
+            // Agregar gráfico
+            yPosition += 15;
+            const chartCanvas = document.getElementById('optimizationChart');
+            const chartImage = await getCanvasImage(chartCanvas);
+            doc.addImage(chartImage, 'PNG', 15, yPosition, 180, 100);
+            yPosition += 110;
+            
+            // Agregar visualización de tubulares
+            doc.addPage();
+            yPosition = 20;
+            doc.setFontSize(14);
+            doc.text('DISTRIBUCIÓN DE TUBULARES - VISTA DE INGENIERÍA', 105, yPosition, { align: 'center' });
+            yPosition += 15;
+            
+            const tubeElements = document.querySelectorAll('.engineering-drawing');
+            for (let i = 0; i < tubeElements.length; i++) {
+                if (i > 0 && i % 1 === 0) { // Solo un dibujo por página para mejor legibilidad
+                    doc.addPage();
+                    yPosition = 20;
+                }
+                
+                const tubeImage = await html2canvas(tubeElements[i]);
+                doc.addImage(tubeImage, 'PNG', 15, yPosition, 180, 80);
+                yPosition += 90;
+                
+                // Agregar notas en la última página
+                if (i === tubeElements.length - 1) {
+                    yPosition += 10;
+                    doc.setFontSize(12);
+                    doc.text('NOTAS:', 15, yPosition);
+                    yPosition += 7;
+                    doc.text('1. Todas las dimensiones en pulgadas', 20, yPosition);
+                    yPosition += 7;
+                    doc.text('2. Tolerancia de corte: ±0.125"', 20, yPosition);
+                    yPosition += 7;
+                    doc.text('3. Eficiencia calculada sobre longitud nominal', 20, yPosition);
+                    yPosition += 7;
+                    doc.text('4. Se considera 1" adicional por tubular para corte', 20, yPosition);
+                    yPosition += 7;
+                    doc.text('5. Todas las dimensiones aplican después del corte', 20, yPosition);
+                    yPosition += 7;
+                    doc.text('6. Verificar medidas antes de cortar', 20, yPosition);
+                }
+            }
+            
+            // Guardar el PDF`
+            doc.save(`Optimización_Cortes_${today.toISOString().slice(0,10)}.pdf`);
+        }
+        
+        function getCanvasImage(canvas) {
+            return new Promise((resolve) => {
+                html2canvas(canvas).then(canvasImage => {
+                    resolve(canvasImage.toDataURL('image/png'));
+                });
+            });
+        }
+        
+        function resetAll() {
+            cuts = [];
+            optimizationResults = null;
+            if (chart) {
+                chart.destroy();
+                chart = null;
+            }
+            resultsDiv.style.display = 'none';
+            cutLengthInput.value = '';
+            cutQuantityInput.value = '1';
+            tubeVisualizationsDiv.innerHTML = '';
+            
+            // Resetear ordenamiento
+            sortState = { column: null, direction: 'asc' };
+            updateSortIndicators();
+            updateCutsList();
+        }
+
+        // Inicializar la lista de cortes
+        updateCutsList();
+    </script>
+</body>
+</html>
