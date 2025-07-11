@@ -397,9 +397,19 @@
         <div class="results" id="results" style="display: none;">
             <button id="exportPdf" class="export-btn">EXPORTAR A PDF</button>
             
-            <div class="summary-card">
-                <h2>RESUMEN DE OPTIMIZACIÓN</h2>
-                <div class="summary-grid" id="summary"></div>
+            <div class="summary-card" id="summary-card-20ft" style="display: none;">
+                <h2>RESUMEN DE OPTIMIZACIÓN (TUBULARES DE 20FT)</h2>
+                <div class="summary-grid" id="summary-20ft"></div>
+            </div>
+
+            <div class="summary-card" id="summary-card-25ft" style="display: none;">
+                <h2>RESUMEN DE OPTIMIZACIÓN (TUBULARES DE 25FT)</h2>
+                <div class="summary-grid" id="summary-25ft"></div>
+            </div>
+
+            <div class="summary-card" id="summary-card-40ft">
+                <h2>RESUMEN DE OPTIMIZACIÓN (TUBULARES DE 40FT)</h2>
+                <div class="summary-grid" id="summary-40ft"></div>
             </div>
 
             <div class="chart-container">
@@ -440,7 +450,9 @@
         const exportPdfBtn = document.getElementById('exportPdf');
         const resultsDiv = document.getElementById('results');
         const cutsTableBody = document.getElementById('cutsTableBody');
-        const summaryDiv = document.getElementById('summary');
+        const summaryDiv40FT = document.getElementById('summary-40ft');
+        const summaryDiv20FT = document.getElementById('summary-20ft');
+        const summaryDiv25FT = document.getElementById('summary-25ft');
         const tubeVisualizationsDiv = document.getElementById('tubeVisualizations');
         const sortableHeaders = document.querySelectorAll('.cuts-table .sortable');
         const saveCutsBtn = document.getElementById('saveCuts');
@@ -967,16 +979,9 @@ hideLoading();
             }
         }
         
-        function optimizeCuts() {
-            const tubeLength = 480; // Se usa un valor fijo de 20 pies para la optimización.
-            if (cuts.length === 0) {
-                alert('AGREGUE AL MENOS UN CORTE');
-                return;
-            }
- 
-            // 1. Agrupar los cortes por descripción.
+        function performOptimization(cutsToProcess, tubeLength) {
             const cutsByDescription = {};
-            cuts.forEach(cut => {
+            cutsToProcess.forEach(cut => {
                 const desc = cut.description || 'Manual';
                 if (!cutsByDescription[desc]) {
                     cutsByDescription[desc] = [];
@@ -985,23 +990,16 @@ hideLoading();
             });
 
             let allOptimizedTubes = [];
-
-            // 2. Iterar sobre cada grupo de descripción y optimizarlo de forma independiente.
             for (const description in cutsByDescription) {
                 const descriptionCuts = cutsByDescription[description];
-                
-                // a. Generar lista plana de cortes para esta descripción.
                 let individualCuts = [];
                 descriptionCuts.forEach(cut => {
                     for (let i = 0; i < cut.quantity; i++) {
                         individualCuts.push({ length: cut.length, description: description });
                     }
                 });
-
-                // b. Ordenar de mayor a menor.
                 individualCuts.sort((a, b) => b.length - a.length);
 
-                // c. Algoritmo First-Fit Decreasing para esta descripción.
                 let tubesForThisDescription = [];
                 individualCuts.forEach(cut => {
                     let placed = false;
@@ -1020,14 +1018,10 @@ hideLoading();
                         });
                     }
                 });
-                
-                // d. Agregar los tubos optimizados de esta descripción a la lista global.
                 allOptimizedTubes.push(...tubesForThisDescription);
             }
 
             const tubes = allOptimizedTubes;
-
-            // 3. Calcular métricas globales
             const totalTubes = tubes.length;
             const totalUsed = tubes.reduce((sum, tube) => sum + (tubeLength - tube.remaining), 0);
             const totalYield = tubes.reduce((sum, tube) => sum + tube.remaining, 0);
@@ -1036,20 +1030,16 @@ hideLoading();
             const totalInches = totalTubes * tubeLength;
             const totalInchesWithKerf = totalInches + totalTubes;
             const totalFeetWithKerf = totalInchesWithKerf / 12;
-
-            // 4. Calcular métricas por descripción (lógica simplificada para tubos no mixtos)
+            
             const summaryByDescription = {};
             Object.keys(cutsByDescription).forEach(desc => {
                 summaryByDescription[desc] = { used: 0, yield: 0, tubeCount: 0, cutCount: 0 };
             });
 
             tubes.forEach(tube => {
-                // Como los tubos ya no se mezclan, todos los cortes en un tubo
-                // pertenecen a la misma descripción. Podemos tomarla del primer corte.
                 if (tube.cuts.length > 0) {
                     const desc = tube.cuts[0].description;
                     const usedInTube = tube.cuts.reduce((sum, cut) => sum + cut.length, 0);
-                    
                     if (summaryByDescription[desc]) {
                         summaryByDescription[desc].used += usedInTube;
                         summaryByDescription[desc].yield += tube.remaining;
@@ -1059,15 +1049,41 @@ hideLoading();
                 }
             });
 
-            // 6. Guardar resultados finales.
-            optimizationResults = {
+            return {
                 tubes, tubeLength, totalTubes, totalUsed, totalYield, efficiency,
                 totalInches, totalInchesWithKerf, totalFeetWithKerf, summaryByDescription
             };
+        }
+
+        function optimizeCuts() {
+            if (cuts.length === 0) {
+                alert('AGREGUE AL MENOS UN CORTE');
+                return;
+            }
+ 
+            const maxCutLength = cuts.length > 0 ? Math.max(...cuts.map(c => c.length)) : 0;
+
+            const createNaResult = (length) => ({
+                tubeLength: length,
+                totalTubes: 'NO APLICA',
+                summaryByDescription: {} // Evita errores en la tabla de desglose
+            });
+ 
+            // Realizar optimización para 40FT (480"), 20FT (240") y 25FT (300")
+            const results40FT = maxCutLength > 480 ? createNaResult(480) : performOptimization(JSON.parse(JSON.stringify(cuts)), 480);
+            const results20FT = maxCutLength > 240 ? createNaResult(240) : performOptimization(JSON.parse(JSON.stringify(cuts)), 240);
+            const results25FT = maxCutLength > 300 ? createNaResult(300) : performOptimization(JSON.parse(JSON.stringify(cuts)), 300);
+
+            // Guardar todos los resultados en la variable global
+            optimizationResults = {
+                '40FT': results40FT,
+                '20FT': results20FT,
+                '25FT': results25FT
+            };
+            
             showResults();
         }
         
-
         function showResults() {
             resultsDiv.style.display = 'block';
             updateSummary();
@@ -1075,57 +1091,113 @@ hideLoading();
             renderEngineeringTubeVisualizations();
         }
         
+        function generateSummaryHtml(results) {
+            if (results.totalTubes === 'NO APLICA') {
+                return `
+                    <div class="summary-item">
+                        <span>Longitud de tubulares:</span>
+                        <strong>${results.tubeLength.toFixed(1)}" (${results.tubeLength / 12} FT)</strong>
+                    </div>
+                    <div class="summary-item">
+                        <span>Tubulares necesarios:</span>
+                        <strong style="color: var(--asme-red);">${results.totalTubes}</strong>
+                    </div>
+                    <div class="summary-item">
+                        <span>Total pulgadas utilizadas:</span>
+                        <strong>N/A</strong>
+                    </div>
+                    <div class="summary-item">
+                        <span>Total pulgadas yield:</span>
+                        <strong>N/A</strong>
+                    </div>
+                    <div class="summary-item">
+                        <span>Eficiencia:</span>
+                        <strong>N/A</strong>
+                    </div>
+                    <div class="summary-item highlight">
+                        <span>Total pulgadas (tubos completos):</span>
+                        <strong>N/A</strong>
+                    </div>
+                    <div class="summary-item highlight">
+                        <span>+ 1" por tubular (corte):</span>
+                        <strong>N/A</strong>
+                    </div>
+                    <div class="summary-item highlight">
+                        <span>Total general con corte:</span>
+                        <strong>N/A</strong>
+                    </div>
+                    <div class="summary-item highlight">
+                        <span>Total en pies (con corte):</span>
+                        <strong>N/A</strong>
+                    </div>
+                `;
+            }
+
+            const { 
+                tubeLength, 
+                totalTubes, 
+                totalUsed, 
+                totalYield, 
+                efficiency, 
+                totalInches,
+                totalInchesWithKerf,
+                totalFeetWithKerf
+            } = results;
+
+            return `
+                <div class="summary-item">
+                    <span>Longitud de tubulares:</span>
+                    <strong>${tubeLength.toFixed(1)}" (${tubeLength / 12} FT)</strong>
+                </div>
+                <div class="summary-item">
+                    <span>Tubulares necesarios:</span>
+                    <strong>${totalTubes}</strong>
+                </div>
+                <div class="summary-item">
+                    <span>Total pulgadas utilizadas:</span>
+                    <strong>${totalUsed.toFixed(1)}"</strong>
+                </div>
+                <div class="summary-item">
+                    <span>Total pulgadas yield:</span>
+                    <strong>${totalYield.toFixed(1)}"</strong>
+                </div>
+                <div class="summary-item">
+                    <span>Eficiencia:</span>
+                    <strong>${efficiency.toFixed(1)}%</strong>
+                </div>
+                <div class="summary-item highlight">
+                    <span>Total pulgadas (tubos completos):</span>
+                    <strong>${totalInches.toFixed(1)}"</strong>
+                </div>
+                <div class="summary-item highlight">
+                    <span>+ 1" por tubular (corte):</span>
+                    <strong>${totalTubes}"</strong>
+                </div>
+                <div class="summary-item highlight">
+                    <span>Total general con corte:</span>
+                    <strong>${totalInchesWithKerf.toFixed(1)}"</strong>
+                </div>
+                <div class="summary-item highlight">
+                    <span>Total en pies (con corte):</span>
+                    <strong>${totalFeetWithKerf.toFixed(2)} FT</strong>
+                </div>
+            `;
+        }
+
         function updateSummary() {
-    const { 
-        tubeLength, 
-        totalTubes, 
-        totalUsed, 
-        totalYield, 
-        efficiency, 
-        totalInches,
-        totalInchesWithKerf,
-        totalFeetWithKerf,
-        summaryByDescription
-    } = optimizationResults;
-    
-    summaryDiv.innerHTML = `
-        <div class="summary-item">
-            <span>Longitud de tubulares:</span>
-            <strong>${tubeLength.toFixed(1)}" (${tubeLength / 12} FT)</strong>
-        </div>
-        <div class="summary-item">
-            <span>Tubulares necesarios:</span>
-            <strong>${totalTubes}</strong>
-        </div>
-        <div class="summary-item">
-            <span>Total pulgadas utilizadas:</span>
-            <strong>${totalUsed.toFixed(1)}"</strong>
-        </div>
-        <div class="summary-item">
-            <span>Total pulgadas yield:</span>
-            <strong>${totalYield.toFixed(1)}"</strong>
-        </div>
-        <div class="summary-item">
-            <span>Eficiencia:</span>
-            <strong>${efficiency.toFixed(1)}%</strong>
-        </div>
-        <div class="summary-item highlight">
-            <span>Total pulgadas (tubos completos):</span>
-            <strong>${totalInches.toFixed(1)}"</strong>
-        </div>
-        <div class="summary-item highlight">
-            <span>+ 1" por tubular (corte):</span>
-            <strong>${totalTubes}"</strong>
-        </div>
-        <div class="summary-item highlight">
-            <span>Total general con corte:</span>
-            <strong>${totalInchesWithKerf.toFixed(1)}"</strong>
-        </div>
-        <div class="summary-item highlight">
-            <span>Total en pies (con corte):</span>
-            <strong>${totalFeetWithKerf.toFixed(2)} FT</strong>
-        </div>
-    `;
+            // Generar y mostrar el resumen para 40FT
+            summaryDiv40FT.innerHTML = generateSummaryHtml(optimizationResults['40FT']);
+
+            // Generar y mostrar el resumen para 20FT
+            summaryDiv20FT.innerHTML = generateSummaryHtml(optimizationResults['20FT']);
+            document.getElementById('summary-card-20ft').style.display = 'block';
+
+            // Generar y mostrar el resumen para 25FT
+            summaryDiv25FT.innerHTML = generateSummaryHtml(optimizationResults['25FT']);
+            document.getElementById('summary-card-25ft').style.display = 'block';
+
+            // --- Lógica para la tabla de desglose (basada en la optimización de 40FT) ---
+            const { summaryByDescription, tubeLength } = optimizationResults['40FT'];
 
     // Limpiar el desglose anterior si existe
     const existingBreakdownCard = document.getElementById('breakdownCard');
@@ -1135,7 +1207,7 @@ hideLoading();
 
     // Agregar nuevo desglose de eficiencia por descripción en una tabla
     let breakdownHtml = '<div class="summary-card" id="breakdownCard" style="grid-column: 1 / -1; margin-top: 20px;">';
-    breakdownHtml += '<h2>DESGLOSE DE EFICIENCIA POR DESCRIPCIÓN</h2>';
+    breakdownHtml += '<h2>DESGLOSE DE EFICIENCIA POR DESCRIPCIÓN (BASADO EN 40FT)</h2>';
     breakdownHtml += `<table class="cuts-table">
                         <thead>
                             <tr>
@@ -1159,8 +1231,7 @@ hideLoading();
         const { used, tubeCount, cutCount } = data;
         const usedInFeet = used / 12;
         
-        // La optimización se ejecuta con tubulares de 40 pies (480 pulgadas).
-        const totalLinearFeetFromOpt = (tubeCount * tubeLength) / 12; // tubeLength es 480
+        const totalLinearFeetFromOpt = (tubeCount * tubeLength) / 12;
 
         // Encontrar la longitud máxima de corte para esta descripción para verificar la viabilidad.
         const cutsForThisDescription = cuts.filter(c => (c.description || 'Manual') === description);
@@ -1208,7 +1279,7 @@ hideLoading();
     }
 
     breakdownHtml += `</tbody></table></div>`;
-    summaryDiv.insertAdjacentHTML('afterend', breakdownHtml);
+    document.getElementById('summary-card-40ft').insertAdjacentHTML('afterend', breakdownHtml);
 }
 
         function renderAsmeChart() {
@@ -1218,7 +1289,7 @@ hideLoading();
                 chart.destroy();
             }
             
-            const { totalUsed, totalYield, tubeLength, totalTubes } = optimizationResults;
+            const { totalUsed, totalYield, tubeLength, totalTubes } = optimizationResults['40FT'];
             const totalAvailable = totalTubes * tubeLength;
             
             Chart.defaults.borderColor = '#ddd';
@@ -1289,7 +1360,7 @@ hideLoading();
         }
         
                 function renderEngineeringTubeVisualizations() {
-            const { tubes, tubeLength } = optimizationResults;
+            const { tubes, tubeLength } = optimizationResults['40FT'];
             tubeVisualizationsDiv.innerHTML = '';
             
             tubes.forEach((tube, index) => {
@@ -1558,12 +1629,12 @@ hideLoading();
             doc.setTextColor(0, 0, 0);
             
             // Agregar fecha
-            const today = new Date();
-            doc.text(`Fecha: ${today.toLocaleDateString()}`, 15, 30);
+            const today = new Date().toLocaleDateString();
+            doc.text(`Fecha: ${today}`, 15, 30);
             
             // Agregar resumen
             doc.setFontSize(14);
-            doc.text('RESUMEN DE OPTIMIZACIÓN', 15, 45);
+            doc.text('RESUMEN DE OPTIMIZACIÓN (TUBULARES DE 40FT)', 15, 45);
             doc.setFontSize(12);
             
             const { 
@@ -1575,7 +1646,7 @@ hideLoading();
                 totalInches,
                 totalInchesWithKerf,
                 totalFeetWithKerf
-            } = optimizationResults;
+            } = optimizationResults['40FT'];
             
             let yPosition = 55;
             
@@ -1651,7 +1722,7 @@ hideLoading();
             }
             
             // Guardar el PDF`
-            doc.save(`Optimización_Cortes_${today.toISOString().slice(0,10)}.pdf`);
+            doc.save(`Optimización_Cortes_${new Date().toISOString().slice(0,10)}.pdf`);
         }
         
         function getCanvasImage(canvas) {
@@ -1673,6 +1744,20 @@ hideLoading();
             cutLengthInput.value = '';
             cutQuantityInput.value = '1';
             tubeVisualizationsDiv.innerHTML = '';
+            summaryDiv40FT.innerHTML = '';
+            summaryDiv20FT.innerHTML = '';
+            summaryDiv25FT.innerHTML = '';
+
+            const summaryCard20ft = document.getElementById('summary-card-20ft');
+            if (summaryCard20ft) summaryCard20ft.style.display = 'none';
+            
+            const summaryCard25ft = document.getElementById('summary-card-25ft');
+            if (summaryCard25ft) summaryCard25ft.style.display = 'none';
+
+            const breakdownCard = document.getElementById('breakdownCard');
+            if (breakdownCard) {
+                breakdownCard.remove();
+            }
             
             // Resetear ordenamiento
             sortState = { column: null, direction: 'asc' };
@@ -1684,4 +1769,5 @@ hideLoading();
         updateCutsList();
     </script>
 </body>
+</html>
 </html>
