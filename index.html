@@ -1144,9 +1144,9 @@ hideLoading();
                                 <th>Mat. Usado (FT)</th>
                                 <th>Tubulares (40')</th>
                                 <th>Total Lineal (FT)</th>
-                                <th>Yield (40')</th>
-                                <th>Yield Hipotético (20')</th>
-                                <th>Yield Hipotético (25')</th>
+                                <th style="width: 13%;">Yield (40')</th>
+                                <th style="width: 13%;">Yield Hipotético (20')</th>
+                                <th style="width: 13%;">Yield Hipotético (25')</th>
                             </tr>
                         </thead>
                         <tbody>`;
@@ -1169,18 +1169,21 @@ hideLoading();
         // --- Yield real para 40 FT (480 pulgadas) ---
         const yield40FtValue = totalLinearFeetFromOpt > 0 ? (usedInFeet / totalLinearFeetFromOpt) : 0;
         const yield40FtText = yield40FtValue.toFixed(4).replace(/^0\./, '.');
+        const yield40FtFormula = totalLinearFeetFromOpt > 0 ? `(${usedInFeet.toFixed(2)} / ${totalLinearFeetFromOpt.toFixed(2)})` : '';
 
         // --- Cálculos hipotéticos para 20 FT (240 pulgadas) ---
         const needed20FtTubes = maxCutLength > 240 ? 0 : (usedInFeet > 0 ? Math.ceil(usedInFeet / 20) : 0);
         const totalLinearFeetFrom20FtTubes = needed20FtTubes * 20;
         const yield20FtValue = totalLinearFeetFrom20FtTubes > 0 ? (usedInFeet / totalLinearFeetFrom20FtTubes) : 0;
         const yield20FtText = maxCutLength > 240 ? 'NO APLICA' : yield20FtValue.toFixed(4).replace(/^0\./, '.');
+        const yield20FtFormula = maxCutLength <= 240 && totalLinearFeetFrom20FtTubes > 0 ? `(${usedInFeet.toFixed(2)} / ${totalLinearFeetFrom20FtTubes.toFixed(2)})` : '';
 
         // --- Cálculos hipotéticos para 25 FT (300 pulgadas) ---
         const needed25FtTubes = maxCutLength > 300 ? 0 : (usedInFeet > 0 ? Math.ceil(usedInFeet / 25) : 0);
         const totalLinearFeetFrom25FtTubes = needed25FtTubes * 25;
         const yield25FtValue = totalLinearFeetFrom25FtTubes > 0 ? (usedInFeet / totalLinearFeetFrom25FtTubes) : 0;
         const yield25FtText = maxCutLength > 300 ? 'NO APLICA' : yield25FtValue.toFixed(4).replace(/^0\./, '.');
+        const yield25FtFormula = maxCutLength <= 300 && totalLinearFeetFrom25FtTubes > 0 ? `(${usedInFeet.toFixed(2)} / ${totalLinearFeetFrom25FtTubes.toFixed(2)})` : '';
 
         breakdownHtml += `
             <tr>
@@ -1189,9 +1192,18 @@ hideLoading();
                 <td>${usedInFeet.toFixed(2)} FT</td>
                 <td><strong>${tubeCount}</strong></td>
                 <td><strong>${totalLinearFeetFromOpt.toFixed(2)} FT</strong></td>
-                <td><strong>${yield40FtText}</strong></td>
-                <td><strong>${yield20FtText}</strong></td>
-                <td><strong>${yield25FtText}</strong></td>
+                <td>
+                    <strong>${yield40FtText}</strong>
+                    ${yield40FtFormula ? `<br><small style="color: #555;">${yield40FtFormula}</small>` : ''}
+                </td>
+                <td>
+                    <strong>${yield20FtText}</strong>
+                    ${yield20FtFormula ? `<br><small style="color: #555;">${yield20FtFormula}</small>` : ''}
+                </td>
+                <td>
+                    <strong>${yield25FtText}</strong>
+                    ${yield25FtFormula ? `<br><small style="color: #555;">${yield25FtFormula}</small>` : ''}
+                </td>
             </tr>`;
     }
 
