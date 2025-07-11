@@ -600,10 +600,7 @@
         function parseLength(str) {
             if (!str || typeof str !== 'string') return NaN;
             
-            // Hacer la función más robusta: eliminar "in" (pulgadas) y comillas (") antes de procesar.
-            // Esto permite que "10 in", "10in" o "10"" se lean correctamente como 10.
-            str = str.replace(/in|"/gi, '').trim().replace('-', ' ');
-
+            str = str.trim().replace('-', ' ');
             const parts = str.split(' ').filter(p => p.length > 0);
             if (parts.length === 0) return NaN;
 
@@ -670,33 +667,29 @@
                 }
 
                 const headerItems = allItems.filter(item => item.transform[5] === headerRowY);
+                const longitudHeader = headerItems.find(item => item.str.toLowerCase().includes('longitud'));
+                const cantidadHeader = headerItems.find(item => item.str.toLowerCase().includes('cant'));
+                const descriptionHeader = headerItems.find(item => item.str.toLowerCase().includes('description'));
 
-                // --- Lógica de Lectura de Tabla Mejorada y Flexible ---
+                if (!descriptionHeader || !longitudHeader || !cantidadHeader) {
+                    hideLoading();
+                    alert('No se encontraron las columnas esenciales (Description, longitud, Cant.) en el PDF.');
+                    return;
+                }
 
-                // 1. Mapear columnas y sus posibles alias para que la lectura sea más robusta.
-                //    Esto permite encontrar "Description" o "Part Number" para la misma columna.
-                const columnMapping = {
-                    description: ['description', 'part number'],
-                    longitud: ['longitud', 'length'],
-                    cant: ['cant', 'qty', 'quantity'],
-                    section: ['section'],
-                    tag: ['tag'],
-                    material: ['material'],
-                    ancho: ['ancho', 'width'],
-                    alto: ['alto', 'height'],
-                    grosor: ['grosor', 'thickness']
-                };
+                // --- Lógica de Lectura de Tabla Mejorada ---
 
+                // 1. Mapear todas las columnas conocidas para reconstruir la estructura de la tabla.
+                const allKnownHeaders = ["section", "tag", "description", "material", "ancho", "alto", "grosor", "longitud", "cant"]; // Lista de encabezados a buscar
                 const foundHeaders = [];
-                let availableHeaderItems = [...headerItems]; // Copia para poder modificarla
+                let availableHeaderItems = [...headerItems]; // Copia de los items de la fila de encabezado para poder modificarla
 
-                // 2. Iterar sobre el mapeo de columnas para encontrar los encabezados en el PDF.
-                for (const canonicalName in columnMapping) {
-                    const aliases = columnMapping[canonicalName];
-                    // Crear una regex que busque cualquiera de los alias. Ej: /\b(description|part number)\b/i
-                    const regex = new RegExp(`\\b(${aliases.join('|')})\\b`, 'i');
+                allKnownHeaders.forEach(headerName => {
+                    // Usamos una expresión regular con límites de palabra (`\b`) para evitar coincidencias parciales (p. ej., "tag" en "voltage").
+                    const regex = new RegExp(`\\b${headerName}\\b`, 'i');
                     let matchIndex = -1;
 
+                    // Buscamos en los encabezados disponibles.
                     const headerItem = availableHeaderItems.find((item, index) => {
                         if (regex.test(item.str)) {
                             matchIndex = index;
@@ -707,20 +700,20 @@
 
                     if (headerItem) {
                         foundHeaders.push({
-                            name: canonicalName, // Usar el nombre interno estándar (ej. "description")
+                            name: headerName,
                             header: headerItem
                         });
-                        // Eliminar el encabezado encontrado para que no se empareje con otro alias.
+                        // Eliminamos el encabezado encontrado para que no pueda ser emparejado de nuevo por otro nombre de columna.
                         availableHeaderItems.splice(matchIndex, 1);
                     }
-                }
+                });
 
-                // 3. Verificar que las columnas esenciales para la app se hayan encontrado.
+                // Verificamos que las columnas esenciales para la app se hayan encontrado.
                 const essentialColumns = ['description', 'longitud', 'cant'];
                 const missing = essentialColumns.filter(c => !foundHeaders.some(h => h.name === c));
                 if (missing.length > 0) {
                     hideLoading();
-                    alert(`Error de lectura: No se pudieron encontrar las columnas esenciales: ${missing.join(', ')}. Verifique que el PDF contenga columnas con esos nombres o sus alias (ej. 'Part Number', 'Length', 'Qty').`);
+                    alert(`Error de lectura: No se pudieron encontrar las columnas esenciales: ${missing.join(', ')}.`);
                     return;
                 }
 

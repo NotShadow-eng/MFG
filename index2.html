@@ -346,11 +346,17 @@
         </div>
         
         <div class="control-panel">
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px;">
+                <div class="form-group">
+                    <label for="tubeLength">LONGITUD DEL TUBULAR (PULG):</label>
+                    <input type="number" id="tubeLength" value="240" step="0.1" min="1">
+                </div>
+                
                 <div class="form-group">
                     <label for="cutLength">LONGITUD DEL CORTE (PULG):</label>
                     <input type="number" id="cutLength" step="0.1" min="0.1">
                 </div>
+                
                 <div class="form-group">
                     <label for="cutQuantity">CANTIDAD:</label>
                     <input type="number" id="cutQuantity" value="1" min="1">
@@ -401,7 +407,7 @@
                 <h2>RESUMEN DE OPTIMIZACIÓN</h2>
                 <div class="summary-grid" id="summary"></div>
             </div>
-
+            
             <div class="chart-container">
                 <canvas id="optimizationChart"></canvas>
             </div>
@@ -432,6 +438,7 @@
         const { jsPDF } = window.jspdf;
         
         // Elementos del DOM
+        const tubeLengthInput = document.getElementById('tubeLength');
         const cutLengthInput = document.getElementById('cutLength');
         const cutQuantityInput = document.getElementById('cutQuantity');
         const addCutBtn = document.getElementById('addCut');
@@ -600,10 +607,7 @@
         function parseLength(str) {
             if (!str || typeof str !== 'string') return NaN;
             
-            // Hacer la función más robusta: eliminar "in" (pulgadas) y comillas (") antes de procesar.
-            // Esto permite que "10 in", "10in" o "10"" se lean correctamente como 10.
-            str = str.replace(/in|"/gi, '').trim().replace('-', ' ');
-
+            str = str.trim().replace('-', ' ');
             const parts = str.split(' ').filter(p => p.length > 0);
             if (parts.length === 0) return NaN;
 
@@ -670,33 +674,29 @@
                 }
 
                 const headerItems = allItems.filter(item => item.transform[5] === headerRowY);
+                const longitudHeader = headerItems.find(item => item.str.toLowerCase().includes('longitud'));
+                const cantidadHeader = headerItems.find(item => item.str.toLowerCase().includes('cant'));
+                const descriptionHeader = headerItems.find(item => item.str.toLowerCase().includes('description'));
 
-                // --- Lógica de Lectura de Tabla Mejorada y Flexible ---
+                if (!descriptionHeader || !longitudHeader || !cantidadHeader) {
+                    hideLoading();
+                    alert('No se encontraron las columnas esenciales (Description, longitud, Cant.) en el PDF.');
+                    return;
+                }
 
-                // 1. Mapear columnas y sus posibles alias para que la lectura sea más robusta.
-                //    Esto permite encontrar "Description" o "Part Number" para la misma columna.
-                const columnMapping = {
-                    description: ['description', 'part number'],
-                    longitud: ['longitud', 'length'],
-                    cant: ['cant', 'qty', 'quantity'],
-                    section: ['section'],
-                    tag: ['tag'],
-                    material: ['material'],
-                    ancho: ['ancho', 'width'],
-                    alto: ['alto', 'height'],
-                    grosor: ['grosor', 'thickness']
-                };
+                // --- Lógica de Lectura de Tabla Mejorada ---
 
+                // 1. Mapear todas las columnas conocidas para reconstruir la estructura de la tabla.
+                const allKnownHeaders = ["section", "tag", "description", "material", "ancho", "alto", "grosor", "longitud", "cant"]; // Lista de encabezados a buscar
                 const foundHeaders = [];
-                let availableHeaderItems = [...headerItems]; // Copia para poder modificarla
+                let availableHeaderItems = [...headerItems]; // Copia de los items de la fila de encabezado para poder modificarla
 
-                // 2. Iterar sobre el mapeo de columnas para encontrar los encabezados en el PDF.
-                for (const canonicalName in columnMapping) {
-                    const aliases = columnMapping[canonicalName];
-                    // Crear una regex que busque cualquiera de los alias. Ej: /\b(description|part number)\b/i
-                    const regex = new RegExp(`\\b(${aliases.join('|')})\\b`, 'i');
+                allKnownHeaders.forEach(headerName => {
+                    // Usamos una expresión regular con límites de palabra (`\b`) para evitar coincidencias parciales (p. ej., "tag" en "voltage").
+                    const regex = new RegExp(`\\b${headerName}\\b`, 'i');
                     let matchIndex = -1;
 
+                    // Buscamos en los encabezados disponibles.
                     const headerItem = availableHeaderItems.find((item, index) => {
                         if (regex.test(item.str)) {
                             matchIndex = index;
@@ -707,20 +707,20 @@
 
                     if (headerItem) {
                         foundHeaders.push({
-                            name: canonicalName, // Usar el nombre interno estándar (ej. "description")
+                            name: headerName,
                             header: headerItem
                         });
-                        // Eliminar el encabezado encontrado para que no se empareje con otro alias.
+                        // Eliminamos el encabezado encontrado para que no pueda ser emparejado de nuevo por otro nombre de columna.
                         availableHeaderItems.splice(matchIndex, 1);
                     }
-                }
+                });
 
-                // 3. Verificar que las columnas esenciales para la app se hayan encontrado.
+                // Verificamos que las columnas esenciales para la app se hayan encontrado.
                 const essentialColumns = ['description', 'longitud', 'cant'];
                 const missing = essentialColumns.filter(c => !foundHeaders.some(h => h.name === c));
                 if (missing.length > 0) {
                     hideLoading();
-                    alert(`Error de lectura: No se pudieron encontrar las columnas esenciales: ${missing.join(', ')}. Verifique que el PDF contenga columnas con esos nombres o sus alias (ej. 'Part Number', 'Length', 'Qty').`);
+                    alert(`Error de lectura: No se pudieron encontrar las columnas esenciales: ${missing.join(', ')}.`);
                     return;
                 }
 
@@ -888,8 +888,9 @@ hideLoading();
             });
             document.getElementById('cancelAdd').addEventListener('click', () => modalOverlay.remove());
             document.getElementById('confirmAdd').addEventListener('click', () => {
-                // Se elimina la validación de longitud máxima para los cortes.
+                const tubeLength = parseFloat(tubeLengthInput.value);
                 const selectedCuts = [];
+                let hasError = false;
 
                 // Resetear estilos de error previos
                 document.querySelectorAll('.modal-body input').forEach(input => input.style.border = '1px solid #ccc');
@@ -906,9 +907,21 @@ hideLoading();
                         const quantity = parseInt(quantityInput.value);
 
                         if (description && !isNaN(length) && length > 0 && !isNaN(quantity) && quantity > 0) {
+                            // Poka-Yoke: Verificar que la longitud del corte no sea mayor que la del tubular.
+                            if (!isNaN(tubeLength) && length > tubeLength) {
+                                alert(`ERROR (POKA-YOKE) EN FILA:\n\n"${description}"\n\nLa longitud del corte (${length}") no puede ser mayor que la del tubular (${tubeLength}").`);
+                                lengthInput.focus();
+                                lengthInput.style.border = '2px solid var(--asme-red)';
+                                hasError = true;
+                                break; // Detener la validación al primer error
+                            }
                             selectedCuts.push({ length, quantity, description });
                         }
                     }
+                }
+
+                if (hasError) {
+                    return; // No cerrar el modal si hay un error
                 }
 
                 if (selectedCuts.length > 0) {
@@ -968,7 +981,11 @@ hideLoading();
         }
         
         function optimizeCuts() {
-            const tubeLength = 480; // Se usa un valor fijo de 20 pies para la optimización.
+            const tubeLength = parseFloat(tubeLengthInput.value);
+            if (isNaN(tubeLength) || tubeLength <= 0) {
+                alert('INGRESE UNA LONGITUD DE TUBULAR VÁLIDA');
+                return;
+            }
             if (cuts.length === 0) {
                 alert('AGREGUE AL MENOS UN CORTE');
                 return;
@@ -1076,129 +1093,118 @@ hideLoading();
         }
         
         function updateSummary() {
-    const { 
-        tubeLength, 
-        totalTubes, 
-        totalUsed, 
-        totalYield, 
-        efficiency, 
-        totalInches,
-        totalInchesWithKerf,
-        totalFeetWithKerf,
-        summaryByDescription
-    } = optimizationResults;
-    
-    summaryDiv.innerHTML = `
-        <div class="summary-item">
-            <span>Longitud de tubulares:</span>
-            <strong>${tubeLength.toFixed(1)}" (${tubeLength / 12} FT)</strong>
-        </div>
-        <div class="summary-item">
-            <span>Tubulares necesarios:</span>
-            <strong>${totalTubes}</strong>
-        </div>
-        <div class="summary-item">
-            <span>Total pulgadas utilizadas:</span>
-            <strong>${totalUsed.toFixed(1)}"</strong>
-        </div>
-        <div class="summary-item">
-            <span>Total pulgadas yield:</span>
-            <strong>${totalYield.toFixed(1)}"</strong>
-        </div>
-        <div class="summary-item">
-            <span>Eficiencia:</span>
-            <strong>${efficiency.toFixed(1)}%</strong>
-        </div>
-        <div class="summary-item highlight">
-            <span>Total pulgadas (tubos completos):</span>
-            <strong>${totalInches.toFixed(1)}"</strong>
-        </div>
-        <div class="summary-item highlight">
-            <span>+ 1" por tubular (corte):</span>
-            <strong>${totalTubes}"</strong>
-        </div>
-        <div class="summary-item highlight">
-            <span>Total general con corte:</span>
-            <strong>${totalInchesWithKerf.toFixed(1)}"</strong>
-        </div>
-        <div class="summary-item highlight">
-            <span>Total en pies (con corte):</span>
-            <strong>${totalFeetWithKerf.toFixed(2)} FT</strong>
-        </div>
-    `;
+            const { 
+                tubeLength, 
+                totalTubes, 
+                totalUsed, 
+                totalYield, 
+                efficiency, 
+                totalInches,
+                totalInchesWithKerf,
+                totalFeetWithKerf,
+                summaryByDescription
+            } = optimizationResults;
+            
+            summaryDiv.innerHTML = `
+                <div class="summary-item">
+                    <span>Longitud de tubulares:</span>
+                    <strong>${tubeLength.toFixed(1)}"</strong>
+                </div>
+                <div class="summary-item">
+                    <span>Tubulares necesarios:</span>
+                    <strong>${totalTubes}</strong>
+                </div>
+                <div class="summary-item">
+                    <span>Total pulgadas utilizadas:</span>
+                    <strong>${totalUsed.toFixed(1)}"</strong>
+                </div>
+                <div class="summary-item">
+                    <span>Total pulgadas yield:</span>
+                    <strong>${totalYield.toFixed(1)}"</strong>
+                </div>
+                <div class="summary-item">
+                    <span>Eficiencia:</span>
+                    <strong>${efficiency.toFixed(1)}%</strong>
+                </div>
+                <div class="summary-item highlight">
+                    <span>Total pulgadas (tubos completos):</span>
+                    <strong>${totalInches.toFixed(1)}"</strong>
+                </div>
+                <div class="summary-item highlight">
+                    <span>+ 1" por tubular (corte):</span>
+                    <strong>${totalTubes}"</strong>
+                </div>
+                <div class="summary-item highlight">
+                    <span>Total general con corte:</span>
+                    <strong>${totalInchesWithKerf.toFixed(1)}"</strong>
+                </div>
+                <div class="summary-item highlight">
+                    <span>Total en pies (con corte):</span>
+                    <strong>${totalFeetWithKerf.toFixed(2)} FT</strong>
+                </div>
+            `;
 
-    // Limpiar el desglose anterior si existe
-    const existingBreakdownCard = document.getElementById('breakdownCard');
-    if (existingBreakdownCard) {
-        existingBreakdownCard.remove();
-    }
+            // Limpiar el desglose anterior si existe
+            const existingBreakdownCard = document.getElementById('breakdownCard');
+            if (existingBreakdownCard) {
+                existingBreakdownCard.remove();
+            }
 
-    // Agregar nuevo desglose de eficiencia por descripción en una tabla
-    let breakdownHtml = '<div class="summary-card" id="breakdownCard" style="grid-column: 1 / -1; margin-top: 20px;">';
-    breakdownHtml += '<h2>DESGLOSE DE EFICIENCIA POR DESCRIPCIÓN</h2>';
-    breakdownHtml += `<table class="cuts-table">
-                        <thead>
-                            <tr>
-                                <th style="width: 20%;">Descripción</th>
-                                <th>Cortes</th>
-                                <th>Mat. Usado (FT)</th>
-                                <th>Tubulares (40')</th>
-                                <th>Total Lineal (FT)</th>
-                                <th>Yield (40')</th>
-                                <th>Yield Hipotético (20')</th>
-                                <th>Yield Hipotético (25')</th>
-                            </tr>
-                        </thead>
-                        <tbody>`;
+            // Agregar nuevo desglose de eficiencia por descripción en una tabla
+            let breakdownHtml = '<div class="summary-card" id="breakdownCard" style="grid-column: 1 / -1; margin-top: 20px;">';
+            breakdownHtml += '<h2>DESGLOSE DE EFICIENCIA POR DESCRIPCIÓN</h2>';
+            breakdownHtml += `<table class="cuts-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 20%;">Descripción</th>
+                                        <th>Cortes</th>
+                                        <th>Mat. Usado (FT)</th>
+                                        <th>Tubulares (${(tubeLength/12).toFixed(0)}')</th>
+                                        <th>Tubulares 20FT</th>
+                                        <th>Tubulares (40')</th>
+                                        <th>Tubulares 40FT</th>
+                                        <th>Yield de 20FT</th>
+                                        <th>Yield de 40FT</th>
+                                    </tr>
+                                </thead>
+                                <tbody>`;
 
-    const sortedDescriptions = Object.entries(summaryByDescription)
-        .filter(([_, data]) => data.used > 0 || data.yield > 0)
-        .sort((a, b) => b[1].used - a[1].used);
+            const sortedDescriptions = Object.entries(summaryByDescription)
+                .filter(([_, data]) => data.used > 0 || data.yield > 0) // Mostrar solo descripciones con actividad
+                .sort((a, b) => b[1].used - a[1].used); // Ordenar por el material más utilizado
 
-    for (const [description, data] of sortedDescriptions) {
-        const { used, tubeCount, cutCount } = data;
-        const usedInFeet = used / 12;
+            for (const [description, data] of sortedDescriptions) {
+                const { used, tubeCount, cutCount } = data;
+                const usedInFeet = used / 12;
+                const totalLinearFeetFromOpt = (tubeCount * tubeLength) / 12;
+
+                // Cálculos para tubulares hipotéticos de 40 FT
+                // Se basa en el total de pies lineales que la optimización original requirió.
+                const needed40FtTubes = totalLinearFeetFromOpt > 0 ? Math.ceil(totalLinearFeetFromOpt / 40) : 0;
+                const totalLinearFeetFrom40FtTubes = needed40FtTubes * 40;
+
+                // Cálculo de "Yield" (eficiencia) como decimal
+                const yield20Ft = totalLinearFeetFromOpt > 0 ? (usedInFeet / totalLinearFeetFromOpt) : 0;
+                const yield40Ft = totalLinearFeetFrom40FtTubes > 0 ? (usedInFeet / totalLinearFeetFrom40FtTubes) : 0;
+
+                breakdownHtml += `
+                    <tr>
+                        <td><strong>${description}</strong></td>
+                        <td><strong>${cutCount}</strong></td>
+                        <td>${usedInFeet.toFixed(2)} FT</td>
+                        <td><strong>${tubeCount}</strong></td>
+                        <td><strong>${totalLinearFeetFromOpt.toFixed(2)} FT</strong></td>
+                        <td><strong>${needed40FtTubes}</strong></td>
+                        <td><strong>${totalLinearFeetFrom40FtTubes.toFixed(2)} FT</strong></td>
+                        <td><strong>${yield20Ft.toFixed(4).replace(/^0\./, '.')}</strong></td>
+                        <td><strong>${yield40Ft.toFixed(4).replace(/^0\./, '.')}</strong></td>
+                    </tr>`;
+            }
+
+            breakdownHtml += `</tbody></table></div>`;
+            summaryDiv.insertAdjacentHTML('afterend', breakdownHtml);
+        }
         
-        // La optimización se ejecuta con tubulares de 40 pies (480 pulgadas).
-        const totalLinearFeetFromOpt = (tubeCount * tubeLength) / 12; // tubeLength es 480
-
-        // Encontrar la longitud máxima de corte para esta descripción para verificar la viabilidad.
-        const cutsForThisDescription = cuts.filter(c => (c.description || 'Manual') === description);
-        const maxCutLength = cutsForThisDescription.length > 0 ? Math.max(...cutsForThisDescription.map(c => c.length)) : 0;
-
-        // --- Yield real para 40 FT (480 pulgadas) ---
-        const yield40FtValue = totalLinearFeetFromOpt > 0 ? (usedInFeet / totalLinearFeetFromOpt) : 0;
-        const yield40FtText = yield40FtValue.toFixed(4).replace(/^0\./, '.');
-
-        // --- Cálculos hipotéticos para 20 FT (240 pulgadas) ---
-        const needed20FtTubes = maxCutLength > 240 ? 0 : (usedInFeet > 0 ? Math.ceil(usedInFeet / 20) : 0);
-        const totalLinearFeetFrom20FtTubes = needed20FtTubes * 20;
-        const yield20FtValue = totalLinearFeetFrom20FtTubes > 0 ? (usedInFeet / totalLinearFeetFrom20FtTubes) : 0;
-        const yield20FtText = maxCutLength > 240 ? 'NO APLICA' : yield20FtValue.toFixed(4).replace(/^0\./, '.');
-
-        // --- Cálculos hipotéticos para 25 FT (300 pulgadas) ---
-        const needed25FtTubes = maxCutLength > 300 ? 0 : (usedInFeet > 0 ? Math.ceil(usedInFeet / 25) : 0);
-        const totalLinearFeetFrom25FtTubes = needed25FtTubes * 25;
-        const yield25FtValue = totalLinearFeetFrom25FtTubes > 0 ? (usedInFeet / totalLinearFeetFrom25FtTubes) : 0;
-        const yield25FtText = maxCutLength > 300 ? 'NO APLICA' : yield25FtValue.toFixed(4).replace(/^0\./, '.');
-
-        breakdownHtml += `
-            <tr>
-                <td><strong>${description}</strong></td>
-                <td><strong>${cutCount}</strong></td>
-                <td>${usedInFeet.toFixed(2)} FT</td>
-                <td><strong>${tubeCount}</strong></td>
-                <td><strong>${totalLinearFeetFromOpt.toFixed(2)} FT</strong></td>
-                <td><strong>${yield40FtText}</strong></td>
-                <td><strong>${yield20FtText}</strong></td>
-                <td><strong>${yield25FtText}</strong></td>
-            </tr>`;
-    }
-
-    breakdownHtml += `</tbody></table></div>`;
-    summaryDiv.insertAdjacentHTML('afterend', breakdownHtml);
-}
-
         function renderAsmeChart() {
             const ctx = document.getElementById('optimizationChart').getContext('2d');
             
@@ -1279,7 +1285,7 @@ hideLoading();
                 function renderEngineeringTubeVisualizations() {
             const { tubes, tubeLength } = optimizationResults;
             tubeVisualizationsDiv.innerHTML = '';
-            
+
             tubes.forEach((tube, index) => {
                 const tubeDiv = document.createElement('div');
                 tubeDiv.className = 'engineering-drawing';
