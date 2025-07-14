@@ -332,6 +332,17 @@
             border-radius: 3px;
             box-sizing: border-box;
         }
+        /* Estilos para la tabla de desglose profesional y formal */
+        .cuts-table .bg-20ft { background-color: #eaf2f8; } /* Azul claro */
+        .cuts-table .bg-25ft { background-color: #e8f6f3; } /* Verde claro */
+        .cuts-table .bg-40ft { background-color: #fef9e7; } /* Amarillo claro */
+        .cuts-table .yield-col { background-color: #f1f1f1 !important; } /* Gris claro para resaltar yield */
+
+        /* Corrección para asegurar que el texto de los encabezados de desglose sea legible */
+        .cuts-table th[class*="bg-"] {
+            color: var(--asme-blue);
+        }
+        .na-text { color: var(--asme-red); font-weight: bold; }
     </style>
 </head>
 <body>
@@ -1028,8 +1039,6 @@ hideLoading();
             const totalAvailable = totalTubes * tubeLength;
             const efficiency = totalAvailable > 0 ? (totalUsed / totalAvailable) * 100 : 0;
             const totalInches = totalTubes * tubeLength;
-            const totalInchesWithKerf = totalInches + totalTubes;
-            const totalFeetWithKerf = totalInchesWithKerf / 12;
             
             const summaryByDescription = {};
             Object.keys(cutsByDescription).forEach(desc => {
@@ -1051,7 +1060,7 @@ hideLoading();
 
             return {
                 tubes, tubeLength, totalTubes, totalUsed, totalYield, efficiency,
-                totalInches, totalInchesWithKerf, totalFeetWithKerf, summaryByDescription
+                totalInches, summaryByDescription
             };
         }
 
@@ -1061,18 +1070,10 @@ hideLoading();
                 return;
             }
  
-            const maxCutLength = cuts.length > 0 ? Math.max(...cuts.map(c => c.length)) : 0;
-
-            const createNaResult = (length) => ({
-                tubeLength: length,
-                totalTubes: 'NO APLICA',
-                summaryByDescription: {} // Evita errores en la tabla de desglose
-            });
- 
             // Realizar optimización para 40FT (480"), 20FT (240") y 25FT (300")
-            const results40FT = maxCutLength > 480 ? createNaResult(480) : performOptimization(JSON.parse(JSON.stringify(cuts)), 480);
-            const results20FT = maxCutLength > 240 ? createNaResult(240) : performOptimization(JSON.parse(JSON.stringify(cuts)), 240);
-            const results25FT = maxCutLength > 300 ? createNaResult(300) : performOptimization(JSON.parse(JSON.stringify(cuts)), 300);
+            const results40FT = performOptimization(JSON.parse(JSON.stringify(cuts)), 480);
+            const results20FT = performOptimization(JSON.parse(JSON.stringify(cuts)), 240);
+            const results25FT = performOptimization(JSON.parse(JSON.stringify(cuts)), 300);
 
             // Guardar todos los resultados en la variable global
             optimizationResults = {
@@ -1118,18 +1119,6 @@ hideLoading();
                         <span>Total pulgadas (tubos completos):</span>
                         <strong>N/A</strong>
                     </div>
-                    <div class="summary-item highlight">
-                        <span>+ 1" por tubular (corte):</span>
-                        <strong>N/A</strong>
-                    </div>
-                    <div class="summary-item highlight">
-                        <span>Total general con corte:</span>
-                        <strong>N/A</strong>
-                    </div>
-                    <div class="summary-item highlight">
-                        <span>Total en pies (con corte):</span>
-                        <strong>N/A</strong>
-                    </div>
                 `;
             }
 
@@ -1139,9 +1128,7 @@ hideLoading();
                 totalUsed, 
                 totalYield, 
                 efficiency, 
-                totalInches,
-                totalInchesWithKerf,
-                totalFeetWithKerf
+                totalInches
             } = results;
 
             return `
@@ -1169,18 +1156,6 @@ hideLoading();
                     <span>Total pulgadas (tubos completos):</span>
                     <strong>${totalInches.toFixed(1)}"</strong>
                 </div>
-                <div class="summary-item highlight">
-                    <span>+ 1" por tubular (corte):</span>
-                    <strong>${totalTubes}"</strong>
-                </div>
-                <div class="summary-item highlight">
-                    <span>Total general con corte:</span>
-                    <strong>${totalInchesWithKerf.toFixed(1)}"</strong>
-                </div>
-                <div class="summary-item highlight">
-                    <span>Total en pies (con corte):</span>
-                    <strong>${totalFeetWithKerf.toFixed(2)} FT</strong>
-                </div>
             `;
         }
 
@@ -1197,7 +1172,13 @@ hideLoading();
             document.getElementById('summary-card-25ft').style.display = 'block';
 
             // --- Lógica para la tabla de desglose (basada en la optimización de 40FT) ---
-            const { summaryByDescription, tubeLength } = optimizationResults['40FT'];
+            const results40FT = optimizationResults['40FT'];
+            const results20FT = optimizationResults['20FT'];
+            const results25FT = optimizationResults['25FT'];
+
+            const { summaryByDescription: summary40, tubeLength: tubeLength40 } = results40FT;
+            const { summaryByDescription: summary20, tubeLength: tubeLength20 } = results20FT;
+            const { summaryByDescription: summary25, tubeLength: tubeLength25 } = results25FT;
 
     // Limpiar el desglose anterior si existe
     const existingBreakdownCard = document.getElementById('breakdownCard');
@@ -1207,74 +1188,86 @@ hideLoading();
 
     // Agregar nuevo desglose de eficiencia por descripción en una tabla
     let breakdownHtml = '<div class="summary-card" id="breakdownCard" style="grid-column: 1 / -1; margin-top: 20px;">';
-    breakdownHtml += '<h2>DESGLOSE DE EFICIENCIA POR DESCRIPCIÓN (BASADO EN 40FT)</h2>';
+    breakdownHtml += '<h2>DESGLOSE DE EFICIENCIA POR DESCRIPCIÓN</h2>';
     breakdownHtml += `<table class="cuts-table">
                         <thead>
                             <tr>
-                                <th style="width: 20%;">Descripción</th>
-                                <th>Cortes</th>
-                                <th>Mat. Usado (FT)</th>
-                                <th>Tubulares (40')</th>
-                                <th>Total Lineal (FT)</th>
-                                <th style="width: 13%;">Yield (40')</th>
-                                <th style="width: 13%;">Yield Hipotético (20')</th>
-                                <th style="width: 13%;">Yield Hipotético (25')</th>
+                               <th rowspan="2" style="width: 15%;">Descripción</th>
+                                <th rowspan="2">Cortes</th>
+                                <th rowspan="2">Mat. Usado (FT)</th>
+                                <th colspan="3" class="bg-20ft">Tubular 20 FT</th>
+                                <th colspan="3" class="bg-25ft">Tubular 25 FT</th>
+                                <th colspan="3" class="bg-40ft">Tubular 40 FT</th>
+                            </tr>
+                            <tr>
+                                <th class="bg-20ft">Tub.</th>
+                                <th class="bg-20ft">Total Lin.</th>
+                                <th class="bg-20ft yield-col">Yield</th>
+                                <th class="bg-25ft">Tub.</th>
+                                <th class="bg-25ft">Total Lin.</th>
+                                <th class="bg-25ft yield-col">Yield</th>
+                                <th class="bg-40ft">Tub.</th>
+                                <th class="bg-40ft">Total Lin.</th>
+                                <th class="bg-40ft yield-col">Yield</th>
+                            </tr>
                             </tr>
                         </thead>
                         <tbody>`;
 
-    const sortedDescriptions = Object.entries(summaryByDescription)
+    const sortedDescriptions = Object.entries(summary40)
         .filter(([_, data]) => data.used > 0 || data.yield > 0)
         .sort((a, b) => b[1].used - a[1].used);
 
-    for (const [description, data] of sortedDescriptions) {
-        const { used, tubeCount, cutCount } = data;
+    for (const [description, data40] of sortedDescriptions) {
+        const { used, cutCount } = data40;
         const usedInFeet = used / 12;
-        
-        const totalLinearFeetFromOpt = (tubeCount * tubeLength) / 12;
 
         // Encontrar la longitud máxima de corte para esta descripción para verificar la viabilidad.
         const cutsForThisDescription = cuts.filter(c => (c.description || 'Manual') === description);
         const maxCutLength = cutsForThisDescription.length > 0 ? Math.max(...cutsForThisDescription.map(c => c.length)) : 0;
 
-        // --- Yield real para 40 FT (480 pulgadas) ---
-        const yield40FtValue = totalLinearFeetFromOpt > 0 ? (usedInFeet / totalLinearFeetFromOpt) : 0;
-        const yield40FtText = yield40FtValue.toFixed(4).replace(/^0\./, '.');
-        const yield40FtFormula = totalLinearFeetFromOpt > 0 ? `(${usedInFeet.toFixed(2)} / ${totalLinearFeetFromOpt.toFixed(2)})` : '';
+        // Buscar datos correspondientes en los otros resultados
+        const data20 = summary20[description] || { tubeCount: 0 };
+        const data25 = summary25[description] || { tubeCount: 0 };
 
-        // --- Cálculos hipotéticos para 20 FT (240 pulgadas) ---
-        const needed20FtTubes = maxCutLength > 240 ? 0 : (usedInFeet > 0 ? Math.ceil(usedInFeet / 20) : 0);
-        const totalLinearFeetFrom20FtTubes = needed20FtTubes * 20;
-        const yield20FtValue = totalLinearFeetFrom20FtTubes > 0 ? (usedInFeet / totalLinearFeetFrom20FtTubes) : 0;
-        const yield20FtText = maxCutLength > 240 ? 'NO APLICA' : yield20FtValue.toFixed(4).replace(/^0\./, '.');
-        const yield20FtFormula = maxCutLength <= 240 && totalLinearFeetFrom20FtTubes > 0 ? `(${usedInFeet.toFixed(2)} / ${totalLinearFeetFrom20FtTubes.toFixed(2)})` : '';
+       const naSpan = '<span class="na-text">NO APLICA</span>';
 
-        // --- Cálculos hipotéticos para 25 FT (300 pulgadas) ---
-        const needed25FtTubes = maxCutLength > 300 ? 0 : (usedInFeet > 0 ? Math.ceil(usedInFeet / 25) : 0);
-        const totalLinearFeetFrom25FtTubes = needed25FtTubes * 25;
-        const yield25FtValue = totalLinearFeetFrom25FtTubes > 0 ? (usedInFeet / totalLinearFeetFrom25FtTubes) : 0;
-        const yield25FtText = maxCutLength > 300 ? 'NO APLICA' : yield25FtValue.toFixed(4).replace(/^0\./, '.');
-        const yield25FtFormula = maxCutLength <= 300 && totalLinearFeetFrom25FtTubes > 0 ? `(${usedInFeet.toFixed(2)} / ${totalLinearFeetFrom25FtTubes.toFixed(2)})` : '';
+        // --- Cálculos para 20 FT (240") ---
+        const is20FtApplicable = maxCutLength <= tubeLength20;
+        const tubeCount20 = is20FtApplicable ? data20.tubeCount : naSpan;
+        const totalLinear20 = is20FtApplicable ? (data20.tubeCount * (tubeLength20 / 12)) : 0;
+        const totalLinear20Text = is20FtApplicable ? totalLinear20.toFixed(2) + ' FT' : naSpan;
+        const yield20 = (is20FtApplicable && totalLinear20 > 0) ? (usedInFeet / totalLinear20).toFixed(4).replace(/^0\./, '.') : naSpan;
+
+        // --- Cálculos para 25 FT (300") ---
+        const is25FtApplicable = maxCutLength <= tubeLength25;
+        const tubeCount25 = is25FtApplicable ? data25.tubeCount : naSpan;
+        const totalLinear25 = is25FtApplicable ? (data25.tubeCount * (tubeLength25 / 12)) : 0;
+        const totalLinear25Text = is25FtApplicable ? totalLinear25.toFixed(2) + ' FT' : naSpan;
+        const yield25 = (is25FtApplicable && totalLinear25 > 0) ? (usedInFeet / totalLinear25).toFixed(4).replace(/^0\./, '.') : naSpan;
+
+        // --- Cálculos para 40 FT (480") ---
+        const is40FtApplicable = maxCutLength <= tubeLength40;
+        const tubeCount40 = is40FtApplicable ? data40.tubeCount : naSpan;
+        const totalLinear40 = is40FtApplicable ? (data40.tubeCount * (tubeLength40 / 12)) : 0;
+        const totalLinear40Text = is40FtApplicable ? totalLinear40.toFixed(2) + ' FT' : naSpan;
+        const yield40 = (is40FtApplicable && totalLinear40 > 0) ? (usedInFeet / totalLinear40).toFixed(4).replace(/^0\./, '.') : naSpan;
 
         breakdownHtml += `
             <tr>
                 <td><strong>${description}</strong></td>
                 <td><strong>${cutCount}</strong></td>
                 <td>${usedInFeet.toFixed(2)} FT</td>
-                <td><strong>${tubeCount}</strong></td>
-                <td><strong>${totalLinearFeetFromOpt.toFixed(2)} FT</strong></td>
-                <td>
-                    <strong>${yield40FtText}</strong>
-                    ${yield40FtFormula ? `<br><small style="color: #555;">${yield40FtFormula}</small>` : ''}
-                </td>
-                <td>
-                    <strong>${yield20FtText}</strong>
-                    ${yield20FtFormula ? `<br><small style="color: #555;">${yield20FtFormula}</small>` : ''}
-                </td>
-                <td>
-                    <strong>${yield25FtText}</strong>
-                    ${yield25FtFormula ? `<br><small style="color: #555;">${yield25FtFormula}</small>` : ''}
-                </td>
+
+                 <td class="bg-20ft"><strong>${tubeCount20}</strong></td>
+                <td class="bg-20ft">${totalLinear20Text}</td>
+                <td class="bg-20ft yield-col"><strong>${yield20}</strong></td>
+                <td class="bg-25ft"><strong>${tubeCount25}</strong></td>
+                <td class="bg-25ft">${totalLinear25Text}</td>
+                <td class="bg-25ft yield-col"><strong>${yield25}</strong></td>
+                <td class="bg-40ft"><strong>${tubeCount40}</strong></td>
+                <td class="bg-40ft">${totalLinear40Text}</td>
+                <td class="bg-40ft yield-col"><strong>${yield40}</strong></td>
             </tr>`;
     }
 
@@ -1339,7 +1332,7 @@ hideLoading();
                         },
                         title: {
                             display: true,
-                            text: 'DISTRIBUCIÓN DE MATERIAL - ASME Y14.5',
+                            text: 'Distribucion de material',
                             font: {
                                 size: 16,
                                 weight: 'bold'
@@ -1643,9 +1636,7 @@ hideLoading();
                 totalUsed, 
                 totalYield, 
                 efficiency, 
-                totalInches,
-                totalInchesWithKerf,
-                totalFeetWithKerf
+                totalInches
             } = optimizationResults['40FT'];
             
             let yPosition = 55;
@@ -1662,22 +1653,10 @@ hideLoading();
             addSummaryLine('Total pulgadas utilizadas:', `${totalUsed.toFixed(1)}"`);
             addSummaryLine('Total pulgadas yield:', `${totalYield.toFixed(1)}"`);
             addSummaryLine('Eficiencia:', `${efficiency.toFixed(1)}%`);
-            
-            // Sección de cálculo con corte
-            yPosition += 5;
-            doc.setFontSize(12);
-            doc.setTextColor(0, 51, 102);
-            doc.text('CÁLCULO DE MATERIAL TOTAL (CON CORTE):', 15, yPosition);
-            yPosition += 7;
-            doc.setTextColor(0, 0, 0);
-            
             addSummaryLine('Total pulgadas (tubos completos):', `${totalInches.toFixed(1)}"`);
-            addSummaryLine('+ 1" por tubular (corte):', `${totalTubes}"`);
-            addSummaryLine('Total general con corte:', `${totalInchesWithKerf.toFixed(1)}"`);
-            addSummaryLine('Total en pies (con corte):', `${totalFeetWithKerf.toFixed(2)} FT`);
             
             // Agregar gráfico
-            yPosition += 15;
+            yPosition += 5;
             const chartCanvas = document.getElementById('optimizationChart');
             const chartImage = await getCanvasImage(chartCanvas);
             doc.addImage(chartImage, 'PNG', 15, yPosition, 180, 100);
